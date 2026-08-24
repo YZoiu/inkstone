@@ -115,7 +115,7 @@ function collectCoreFiles(bundle: BuildBundle): string[] {
 function serviceWorkerSource(buildId: string, coreUrls: string[], allUrls: string[]): string {
 	return `const BUILD_ID = ${JSON.stringify(buildId)}
 	const SHELL_CACHE = ${JSON.stringify(`inkstone-shell-${buildId}`)}
-	const ASSET_CACHE = 'inkstone-assets-v1'
+	const ASSET_CACHE = 'inkstone-assets-v2'
 	const CORE_URLS = ${JSON.stringify(coreUrls)}
 	const ALL_OFFLINE_URLS = ${JSON.stringify(allUrls)}
 	const OPTIONAL_URLS = ALL_OFFLINE_URLS.filter((url) => !CORE_URLS.includes(url))
@@ -154,7 +154,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys()
     await Promise.all(keys
-      .filter((key) => key.startsWith('inkstone-shell-') && key !== SHELL_CACHE)
+      .filter((key) =>
+        (key.startsWith('inkstone-shell-') && key !== SHELL_CACHE) ||
+        (key.startsWith('inkstone-assets-') && key !== ASSET_CACHE))
       .map((key) => caches.delete(key)))
     await self.clients.claim()
   })())
@@ -184,9 +186,9 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cached = await caches.match(request, { ignoreSearch: true })
-    if (cached) return cached
+    if (cached && !isHtmlServedAsAsset(url.pathname, cached)) return cached
     const response = await fetch(request)
-    if (response.ok && OPTIONAL_URL_SET.has(url.pathname)) {
+    if (response.ok && OPTIONAL_URL_SET.has(url.pathname) && !isHtmlServedAsAsset(url.pathname, response)) {
       const assets = await caches.open(ASSET_CACHE)
       await assets.put(url.pathname, response.clone())
     }
@@ -300,7 +302,15 @@ async function pruneAssetCache(cache) {
 async function fetchRequired(url) {
   const response = await fetch(url)
   if (!response.ok) throw new Error('Failed to cache ' + url + ': HTTP ' + response.status)
+  if (isHtmlServedAsAsset(url, response)) {
+    throw new Error('Failed to cache ' + url + ': HTML fallback')
+  }
   return response
+}
+
+function isHtmlServedAsAsset(path, response) {
+  if (!path.startsWith('/assets/') && !/\\.(js|css|woff2?)$/.test(path)) return false
+  return (response.headers.get('Content-Type') || '').includes('text/html')
 }
 
 function isImmutableAsset(url) {

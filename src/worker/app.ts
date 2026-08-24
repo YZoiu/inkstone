@@ -36,8 +36,8 @@ export function createApp() {
     c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
     c.header(
       'Content-Security-Policy',
-        "default-src 'self'; base-uri 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-        `img-src 'self' data: blob: ${imageSchemes}; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; ` +
+        "default-src 'self'; base-uri 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; " +
+        `img-src 'self' data: blob: ${imageSchemes}; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; worker-src 'self' blob:; ` +
         `manifest-src 'self'; media-src 'self' blob:; form-action ${formAction}; frame-src 'none'; ` +
         "frame-ancestors 'none'; object-src 'none'",
     )

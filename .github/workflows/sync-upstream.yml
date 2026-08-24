@@ -1,0 +1,80 @@
+# Keep this fork identical to upstream, then let Cloudflare Workers Git
+# integration deploy whatever lands on main.
+#
+# Flow:
+#   shuaiplus/inkstone (upstream)
+#     -> this workflow merges into YZoiu/inkstone@main
+#     -> Cloudflare Workers (connected Git repo) builds and deploys
+#
+# GitHub scheduled workflows cannot run more often than every ~5 minutes.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [sync-upstream]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge upstream into fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork with shuaiplus/inkstone
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_REPO: shuaiplus/inkstone
+          UPSTREAM_BRANCH: main
+        run: |
+          set -euo pipefail
+
+          repo="${GITHUB_REPOSITORY}"
+          branch="${GITHUB_REF_NAME}"
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          compare="${owner}:${branch}...${UPSTREAM_REPO%%/*}:${UPSTREAM_BRANCH}"
+
+          echo "Comparing ${compare}"
+          ahead_by="$(gh api "repos/${UPSTREAM_REPO}/compare/${compare}" --jq .ahead_by)"
+          behind_by="$(gh api "repos/${UPSTREAM_REPO}/compare/${compare}" --jq .behind_by)"
+          upstream_sha="$(gh api "repos/${UPSTREAM_REPO}/commits/${UPSTREAM_BRANCH}" --jq .sha)"
+          fork_sha="$(gh api "repos/${repo}/commits/${branch}" --jq .sha)"
+
+          echo "upstream_sha=${upstream_sha}"
+          echo "fork_sha=${fork_sha}"
+          echo "upstream_ahead=${ahead_by}"
+          echo "fork_unique=${behind_by}"
+
+          {
+            echo "## Fork sync"
+            echo ""
+            echo "- Upstream: \`${UPSTREAM_REPO}@${UPSTREAM_BRANCH}\` (\`${upstream_sha}\`)"
+            echo "- Fork: \`${repo}@${branch}\` (\`${fork_sha}\`)"
+            echo "- Commits on upstream not in this fork: \`${ahead_by}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "${ahead_by}" = "0" ]; then
+            echo "Fork is already current with upstream."
+            echo "- Result: already up to date" >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          echo "Merging ${ahead_by} upstream commit(s) into ${repo}@${branch}..."
+
+          if ! result="$(gh api --method POST "repos/${repo}/merge-upstream" -f branch="${branch}")"; then
+            echo "::error::Failed to merge upstream. Resolve conflicts on main, then re-run this workflow."
+            echo "- Result: merge failed" >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          echo "${result}" | jq '{message, merge_type, base_branch}'
+          merge_type="$(echo "${result}" | jq -r '.merge_type')"
+          echo "- Result: merged (\`${merge_type}\`)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Cloudflare Workers Git integration will deploy this push to main."

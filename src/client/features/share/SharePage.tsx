@@ -6,7 +6,7 @@ import { api, ApiError } from '../../lib/api';
 import { fullTime } from '../../lib/time';
 import { readingMinutes, countText } from '@shared/markdown-utils';
 import { renderMarkdown } from '../../lib/markdown/renderer';
-import { enhancePreview, renderPendingMermaid, resetMermaidNode } from '../../lib/markdown/enhance';
+import { enhancePreview, renderPendingMermaid, resetMermaidNode, toggleCodeBlockCollapse } from '../../lib/markdown/enhance';
 import { Avatar, Button, Logo } from '../../components/primitives';
 import { Input } from '../../components/form';
 import { LoadingBlock } from '../../components/feedback';
@@ -102,7 +102,7 @@ export function SharePage({ slug }: {
         let cancelled = false;
         const isCurrent = () => !cancelled && enhancementRevisionRef.current === revision && hostRef.current === host;
         void (async () => {
-            await enhancePreview(host, { math: true, mermaid: true, dark });
+            await enhancePreview(host, { math: true, mermaid: true, dark, codeBlockCollapseLines: 24 });
             if (!isCurrent())
                 return;
             await renderPendingMermaid(host, dark, { isCurrent });
@@ -156,6 +156,11 @@ export function SharePage({ slug }: {
                 }, 900);
                 copyResetTimersRef.current.set(copyButton, timer);
             }).catch(() => toast({ title: t("preview.could_not_copy"), tone: 'danger' }));
+            return;
+        }
+        const collapseButton = target.closest<HTMLButtonElement>('[data-code-collapse]');
+        if (collapseButton) {
+            toggleCodeBlockCollapse(collapseButton);
             return;
         }
         const tabButton = target.closest<HTMLButtonElement>('[data-tab-button]');

@@ -39,7 +39,7 @@ interface RenderEnvironment {
     taskNonce: string;
     tabSequence: number;
     exampleSequence: number;
-    docId?: string;
+    docId: string;
 }
 export interface WikiTarget {
     raw: string;
@@ -153,7 +153,7 @@ md.block.ruler.before('fence', 'modern_container', (state, startLine, endLine, s
             return true;
         }
         const env = renderEnv(state.env);
-        const id = `ink-tabs-${++env.tabSequence}`;
+        const id = `${env.docId}-tabs-${++env.tabSequence}`;
         const selectedIndex = Math.max(0, tabs.findIndex((tab) => tab.selected));
         const openToken = state.push('tabs_open', 'div', 1);
         openToken.block = true;
@@ -174,14 +174,16 @@ md.block.ruler.before('fence', 'modern_container', (state, startLine, endLine, s
     return true;
 });
 md.renderer.rules.details_open = (tokens, index) => {
+    const sourceLine = tokens[index]!.map?.[0];
     const open = Boolean((tokens[index]!.meta as {
         open?: boolean;
     })?.open);
-    return `<details class="markdown-details"${open ? ' open' : ''}>`;
+    return `<details class="markdown-details"${sourceLine === undefined ? '' : ` data-line="${sourceLine}"`}${open ? ' open' : ''}>`;
 };
 md.renderer.rules.details_summary = (tokens, index) => `<summary>${escapeHtml(tokens[index]!.content)}</summary>`;
 md.renderer.rules.details_close = () => '</details>';
 md.renderer.rules.tabs_open = (tokens, index) => {
+    const sourceLine = tokens[index]!.map?.[0];
     const { id, titles, selectedIndex } = tokens[index]!.meta as {
         id: string;
         titles: string[];
@@ -190,7 +192,7 @@ md.renderer.rules.tabs_open = (tokens, index) => {
     const buttons = titles
         .map((title, tabIndex) => `<button type="button" role="tab" id="${id}-tab-${tabIndex}" aria-controls="${id}-panel-${tabIndex}" aria-selected="${tabIndex === selectedIndex ? 'true' : 'false'}" tabindex="${tabIndex === selectedIndex ? '0' : '-1'}" data-tab-button="${tabIndex}">${escapeHtml(title)}</button>`)
         .join('');
-    return `<div class="markdown-tabs" data-tabs><div class="tab-list" role="tablist" aria-label="${escapeAttr(t("common.tabs"))}">${buttons}</div>`;
+    return `<div class="markdown-tabs" data-tabs${sourceLine === undefined ? '' : ` data-line="${sourceLine}"`}><div class="tab-list" role="tablist" aria-label="${escapeAttr(t("common.tabs"))}">${buttons}</div>`;
 };
 md.renderer.rules.tabs_close = () => '</div>';
 md.renderer.rules.tab_panel_open = (tokens, index) => {
@@ -491,7 +493,7 @@ md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
         childEnv.taskNonce = parentEnv.taskNonce;
         childEnv.tabSequence = parentEnv.tabSequence;
         childEnv.exampleSequence = parentEnv.exampleSequence;
-        childEnv.docId = `example-${exampleId}`;
+        childEnv.docId = `${parentEnv.docId}-example-${exampleId}`;
         const preview = md.render(token.content, childEnv).replace(/ data-line="\d+"/g, '');
         parentEnv.hasMath ||= childEnv.hasMath;
         parentEnv.hasMermaid ||= childEnv.hasMermaid;
@@ -499,7 +501,7 @@ md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
         parentEnv.tabSequence = childEnv.tabSequence;
         parentEnv.exampleSequence = Math.max(parentEnv.exampleSequence, childEnv.exampleSequence);
         const title = info.title || t("markdown.markdown_example");
-        const titleId = `ink-markdown-example-${exampleId}`;
+        const titleId = `${parentEnv.docId}-markdown-example-${exampleId}`;
         return [
             `<section class="markdown-example"${line} aria-labelledby="${titleId}">`,
             `<div class="markdown-example-head"><span class="markdown-example-title" id="${titleId}">${escapeHtml(title)}</span></div>`,
@@ -799,6 +801,7 @@ export function parsePandocAttributes(source: string): Array<[
     return attrs;
 }
 function emptyEnvironment(): RenderEnvironment {
+    const nonce = createNonce();
     return {
         headings: [],
         hasMath: false,
@@ -806,9 +809,10 @@ function emptyEnvironment(): RenderEnvironment {
         hasEmbeds: false,
         frontMatter: {},
         frontMatterErrors: [],
-        taskNonce: createNonce(),
+        taskNonce: nonce,
         tabSequence: 0,
         exampleSequence: 0,
+        docId: `ink-${nonce}`,
     };
 }
 function renderEnv(value: unknown): RenderEnvironment {

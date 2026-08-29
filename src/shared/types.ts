@@ -121,6 +121,8 @@ export interface PreviewSettings {
   showToc: boolean
   math: boolean
   mermaid: boolean
+  codeBlockCollapse: boolean
+  codeBlockCollapseLines: number
 }
 
 export interface BackupSettings {

@@ -8,12 +8,12 @@ import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, c
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import type { EditorSettings } from '@shared/types';
 import { cn } from '../lib/cn';
-import { codeLanguages } from './codeLanguages';
 import { editorTheme } from './theme';
-import { focusModePlugin, markdownDecorations, typewriterPlugin } from './decorations';
+import { focusModePlugin, markdownDecorations, setFocusMode, typewriterPlugin } from './decorations';
+import { codeLanguages } from './codeLanguages';
 import { codeFenceSource, tagSource, wikiLinkSource, type CompletionSources } from './completion';
 import { pasteExtension, type PasteHandlers } from './paste';
-import { setHeading, smartEnter, tableTab, toggleBold, toggleBulletList, toggleHighlight, toggleInlineCode, toggleItalic, toggleOrderedList, toggleQuote, toggleStrikethrough, toggleTaskDone, toggleTaskList, } from './commands';
+import { completeCodeFenceOnEnter, setHeading, smartEnter, tableTab, toggleBold, toggleBulletList, toggleHighlight, toggleInlineCode, toggleItalic, toggleOrderedList, toggleQuote, toggleStrikethrough, toggleTaskDone, toggleTaskList, } from './commands';
 import { t } from "../lib/i18n";
 
 const externalValueUpdate = Annotation.define<boolean>();
@@ -87,7 +87,7 @@ export function CodeEditor({ value, onChange, settings, sources, handlers, onRea
             typewriterPlugin,
             pasteExtension(cbRef.current.handlers),
             keymap.of([
-                { key: 'Enter', run: smartEnter },
+                { key: 'Enter', run: (view) => completeCodeFenceOnEnter(view) || smartEnter(view) },
                 { key: 'Tab', run: (view) => acceptCompletion(view) || tableTab(view) },
                 { key: 'Mod-b', run: toggleBold, preventDefault: true },
                 { key: 'Mod-i', run: toggleItalic, preventDefault: true },
@@ -197,5 +197,9 @@ export function CodeEditor({ value, onChange, settings, sources, handlers, onRea
         if (content)
             content.spellcheck = settings.spellcheck;
     }, [settings.spellcheck]);
+
+    useEffect(() => {
+        viewRef.current?.dispatch({ effects: setFocusMode.of(settings.focusMode) });
+    }, [settings.focusMode]);
     return (<div ref={hostRef} className={cn('ink-editor', className)} data-family={settings.fontFamily} data-focus-mode={settings.focusMode} data-typewriter={settings.typewriter}/>);
 }

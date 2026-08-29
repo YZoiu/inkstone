@@ -96,15 +96,14 @@ const LANG_ALIASES: Record<string, string> = {
 async function getHighlighter(): Promise<Highlighter | null> {
     if (!highlighterPromise) {
         const loading = withTimeout((async () => {
-            const [{ createBundledHighlighter }, { createOnigurumaEngine }, { default: getWasmInstance }] = await Promise.all([
+            const [{ createBundledHighlighter }, { createJavaScriptRegexEngine }] = await Promise.all([
                 import('@shikijs/core'),
-                import('@shikijs/engine-oniguruma'),
-                import('@shikijs/engine-oniguruma/wasm-inlined'),
+                import('@shikijs/engine-javascript'),
             ]);
             const createHighlighter = createBundledHighlighter({
                 langs: SHIKI_LANGUAGES,
                 themes: SHIKI_THEMES,
-                engine: () => createOnigurumaEngine(getWasmInstance),
+                engine: () => createJavaScriptRegexEngine(),
             });
             return (await createHighlighter({
                 themes: ['github-light', 'github-dark-dimmed'],
@@ -179,8 +178,7 @@ async function highlightCodeBlocks(root: HTMLElement): Promise<void> {
         return;
     const highlighter = await getHighlighter();
     if (!highlighter) {
-        pending.forEach(({ block, pre }) => {
-            pre.classList.remove('shiki-pending');
+        pending.forEach(({ block }) => {
             decorateCodeBlock(block);
         });
         return;
@@ -192,14 +190,13 @@ async function highlightCodeBlocks(root: HTMLElement): Promise<void> {
             const html = highlighter.codeToHtml(code, {
                 lang: ok ? (LANG_ALIASES[requested] ?? requested) : 'text',
                 themes: { light: 'github-light', dark: 'github-dark-dimmed' },
-                defaultColor: false,
+                defaultColor: 'light',
             });
             remember(highlightedCodeCache, key, html, 180);
             pre.outerHTML = html;
             decorateCodeBlock(block);
         }
         catch {
-            pre.classList.remove('shiki-pending');
             decorateCodeBlock(block);
         }
     }
@@ -235,6 +232,65 @@ export function decorateCodeBlock(block: HTMLElement): void {
         line.dataset.lineNumber = String(start + index);
         line.classList.toggle('highlighted', highlighted.has(index + 1));
     });
+}
+let generatedCodeBlockId = 0;
+
+export function configureCodeBlockCollapsing(root: HTMLElement, collapseLines: number): void {
+    const threshold = Number.isInteger(collapseLines) && collapseLines >= 8 ? collapseLines : 0;
+    root.querySelectorAll<HTMLElement>('.code-block:not(.markdown-example-code)').forEach((block) => {
+        const button = block.querySelector<HTMLButtonElement>('[data-code-collapse]');
+        const pre = block.querySelector<HTMLElement>(':scope > pre');
+        const lineCount = block.querySelectorAll(':scope pre code > .line').length;
+        const wasExpanded = block.classList.contains('is-code-expanded');
+        block.classList.remove('is-code-collapsed', 'is-code-expanded');
+        delete block.dataset.codeCollapseLines;
+        delete block.dataset.codeLineCount;
+        delete block.dataset.codeCollapseMaxHeight;
+        if (pre)
+            pre.style.maxHeight = '';
+        button?.remove();
+        if (!threshold || lineCount <= threshold)
+            return;
+        const head = block.querySelector<HTMLElement>(':scope > .code-block-head');
+        if (!head)
+            return;
+        block.dataset.codeCollapseLines = String(threshold);
+        block.dataset.codeLineCount = String(lineCount);
+        block.classList.add(wasExpanded ? 'is-code-expanded' : 'is-code-collapsed');
+        const maxHeight = `${threshold * 1.56 + 1.5}em`;
+        block.dataset.codeCollapseMaxHeight = maxHeight;
+        if (pre)
+            pre.style.maxHeight = wasExpanded ? '' : maxHeight;
+        const codeId = pre?.id || `ink-code-${++generatedCodeBlockId}`;
+        if (pre)
+            pre.id = codeId;
+        const toggle = document.createElement('button');
+        toggle.className = 'code-collapse';
+        toggle.type = 'button';
+        toggle.dataset.codeCollapse = '1';
+        toggle.setAttribute('aria-controls', codeId);
+        toggle.setAttribute('aria-expanded', String(wasExpanded));
+        toggle.textContent = wasExpanded
+            ? t('markdown.collapse_code')
+            : t('markdown.show_more_code', { count: lineCount - threshold });
+        head.insertBefore(toggle, head.querySelector('[data-copy]'));
+    });
+}
+export function toggleCodeBlockCollapse(button: HTMLButtonElement): void {
+    const block = button.closest<HTMLElement>('.code-block');
+    if (!block)
+        return;
+    const expanded = block.classList.toggle('is-code-expanded');
+    block.classList.toggle('is-code-collapsed', !expanded);
+    const pre = block.querySelector<HTMLElement>(':scope > pre');
+    if (pre)
+        pre.style.maxHeight = expanded ? '' : block.dataset.codeCollapseMaxHeight ?? '';
+    button.setAttribute('aria-expanded', String(expanded));
+    button.textContent = expanded
+        ? t('markdown.collapse_code')
+        : t('markdown.show_more_code', {
+            count: Math.max(0, Number(block.dataset.codeLineCount) - Number(block.dataset.codeCollapseLines)),
+        });
 }
 interface KatexLike {
     renderToString: (tex: string, options?: Record<string, unknown>) => string;
@@ -275,14 +331,17 @@ async function renderMath(root: HTMLElement): Promise<void> {
         if (!cached)
             continue;
         item.node.innerHTML = cached;
+        item.node.classList.remove('math-source');
         item.node.dataset.rendered = '1';
         pending.splice(index, 1);
     }
     if (!pending.length)
         return;
     const katex = await getKatex();
-    if (!katex)
+    if (!katex) {
+        pending.forEach(({ node, source, display }) => showMathSource(node, source, display));
         return;
+    }
     for (const { node, source, display, key } of pending) {
         try {
             const html = katex.renderToString(source, {
@@ -294,6 +353,7 @@ async function renderMath(root: HTMLElement): Promise<void> {
             });
             remember(mathCache, key, html, 160);
             node.innerHTML = html;
+            node.classList.remove('math-source');
             node.dataset.rendered = '1';
         }
         catch (err) {
@@ -302,6 +362,19 @@ async function renderMath(root: HTMLElement): Promise<void> {
             void err;
         }
     }
+}
+function showMathSource(root: HTMLElement): void;
+function showMathSource(node: HTMLElement, source: string, display: boolean): void;
+function showMathSource(target: HTMLElement, source?: string, display?: boolean): void {
+    if (source === undefined) {
+        target.querySelectorAll<HTMLElement>('[data-math]').forEach((node) => {
+            showMathSource(node, decodeDataValue(node.dataset.math), node.classList.contains('math-block'));
+        });
+        return;
+    }
+    delete target.dataset.rendered;
+    target.classList.add('math-source');
+    target.textContent = display ? `$$\n${source}\n$$` : `$${source}$`;
 }
 type MermaidApi = typeof import('mermaid').default;
 type MermaidTheme = 'dark' | 'default';
@@ -498,6 +571,7 @@ export interface EnhanceOptions {
     math: boolean;
     mermaid: boolean;
     dark: boolean;
+    codeBlockCollapseLines?: number;
 }
 export async function enhancePreview(root: HTMLElement, options: EnhanceOptions): Promise<void> {
     if (options.mermaid) {
@@ -509,10 +583,13 @@ export async function enhancePreview(root: HTMLElement, options: EnhanceOptions)
     else {
         showMermaidSource(root);
     }
+    if (!options.math)
+        showMathSource(root);
     await Promise.allSettled([
         highlightCodeBlocks(root),
         options.math ? renderMath(root) : Promise.resolve(),
     ]);
+    configureCodeBlockCollapsing(root, options.codeBlockCollapseLines ?? 24);
 }
 export function invalidateMermaidTheme(root: HTMLElement | null): void {
     root?.querySelectorAll<HTMLElement>('[data-mermaid]').forEach((node) => {

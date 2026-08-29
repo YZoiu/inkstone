@@ -12,6 +12,15 @@ export const codeLanguages: readonly LanguageDescription[] = [
     load: () => import('@codemirror/lang-cpp').then((module) => module.cpp()),
   }),
   LanguageDescription.of({
+    name: 'C#',
+    alias: ['csharp', 'cs'],
+    extensions: ['cs'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/clike').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.csharp)),
+      ),
+  }),
+  LanguageDescription.of({
     name: 'CSS',
     extensions: ['css'],
     load: async () => css(),
@@ -20,6 +29,41 @@ export const codeLanguages: readonly LanguageDescription[] = [
     name: 'Go',
     extensions: ['go'],
     load: () => import('@codemirror/lang-go').then((module) => module.go()),
+  }),
+  LanguageDescription.of({
+    name: 'Dart',
+    extensions: ['dart'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/clike').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.dart)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'Diff',
+    alias: ['patch'],
+    extensions: ['diff', 'patch'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/diff').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.diff)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'Dockerfile',
+    alias: ['docker'],
+    filename: /^Dockerfile(?:\..*)?$/,
+    load: () =>
+      import('@codemirror/legacy-modes/mode/dockerfile').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.dockerFile)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'INI',
+    alias: ['conf', 'dotenv', 'env'],
+    extensions: ['ini', 'conf', 'env'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/properties').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.properties)),
+      ),
   }),
   LanguageDescription.of({
     name: 'HTML',
@@ -31,6 +75,15 @@ export const codeLanguages: readonly LanguageDescription[] = [
     name: 'Java',
     extensions: ['java'],
     load: () => import('@codemirror/lang-java').then((module) => module.java()),
+  }),
+  LanguageDescription.of({
+    name: 'Kotlin',
+    alias: ['kt'],
+    extensions: ['kt', 'kts'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/clike').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.kotlin)),
+      ),
   }),
   LanguageDescription.of({
     name: 'JavaScript',
@@ -67,6 +120,24 @@ export const codeLanguages: readonly LanguageDescription[] = [
     load: () => import('@codemirror/lang-python').then((module) => module.python()),
   }),
   LanguageDescription.of({
+    name: 'PowerShell',
+    alias: ['ps1'],
+    extensions: ['ps1', 'psm1', 'psd1'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/powershell').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.powerShell)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'Ruby',
+    alias: ['rb'],
+    extensions: ['rb'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/ruby').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.ruby)),
+      ),
+  }),
+  LanguageDescription.of({
     name: 'Rust',
     alias: ['rs'],
     extensions: ['rs'],
@@ -85,6 +156,30 @@ export const codeLanguages: readonly LanguageDescription[] = [
     name: 'SQL',
     extensions: ['sql'],
     load: () => import('@codemirror/lang-sql').then((module) => module.sql()),
+  }),
+  LanguageDescription.of({
+    name: 'Swift',
+    extensions: ['swift'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/swift').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.swift)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'TOML',
+    extensions: ['toml'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/toml').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.toml)),
+      ),
+  }),
+  LanguageDescription.of({
+    name: 'Nginx',
+    extensions: ['nginx'],
+    load: () =>
+      import('@codemirror/legacy-modes/mode/nginx').then(
+        (module) => new LanguageSupport(StreamLanguage.define(module.nginx)),
+      ),
   }),
   LanguageDescription.of({
     name: 'XML',

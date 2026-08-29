@@ -486,6 +486,46 @@ function insertPrefixedBlock(text: string, cursorOffset: number): StateCommand {
     };
 }
 const LIST_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?(.*)$/;
+const FENCE_RE = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/;
+
+export const completeCodeFenceOnEnter: StateCommand = ({ state, dispatch }) => {
+    const range = state.selection.main;
+    if (!range.empty)
+        return false;
+    const line = state.doc.lineAt(range.head);
+    if (range.head !== line.to || openFenceBeforeLine(state, line.number))
+        return false;
+    const match = FENCE_RE.exec(line.text);
+    if (!match)
+        return false;
+    const fence = match[1]!;
+    const insert = `\n\n${fence}`;
+    dispatch(state.update({
+        changes: { from: range.head, insert },
+        selection: EditorSelection.cursor(range.head + 1),
+        scrollIntoView: true,
+        userEvent: 'input.complete',
+    }));
+    return true;
+};
+
+function openFenceBeforeLine(state: EditorState, lineNumber: number): boolean {
+    let opening: { char: string; length: number } | null = null;
+    for (let number = 1; number < lineNumber; number++) {
+        const match = FENCE_RE.exec(state.doc.line(number).text);
+        if (!match)
+            continue;
+        const marker = match[1]!;
+        if (!opening) {
+            opening = { char: marker[0]!, length: marker.length };
+            continue;
+        }
+        if (marker[0] === opening.char && marker.length >= opening.length && /^[ \t]*$/.test(match[2]!))
+            opening = null;
+    }
+    return opening !== null;
+}
+
 export const smartEnter: StateCommand = ({ state, dispatch }) => {
     const range = state.selection.main;
     if (!range.empty)

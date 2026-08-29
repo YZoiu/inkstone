@@ -524,6 +524,20 @@
   color: var(--success);
   opacity: 1;
 }
+.ink-prose .code-collapse {
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 20px;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.ink-prose .code-collapse:hover,
+.ink-prose .code-collapse:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 
 .ink-prose pre {
   margin: 0;
@@ -545,19 +559,20 @@
   font-weight: inherit;
   line-height: inherit;
 }
+.ink-prose .code-block.is-code-collapsed pre {
+  overflow-y: hidden;
+}
 
 
 .ink-prose .shiki,
 .ink-prose .shiki span {
-  color: var(--shiki-light);
-  background-color: transparent;
+  background-color: transparent !important;
   font-style: normal;
   font-weight: var(--code-weight, 400);
-  text-decoration: var(--shiki-light-text-decoration);
 }
 :root[data-theme='dark'] .ink-prose .shiki,
 :root[data-theme='dark'] .ink-prose .shiki span {
-  color: var(--shiki-dark);
+  color: var(--shiki-dark) !important;
   font-style: normal;
   font-weight: var(--code-weight, 400);
   text-decoration: var(--shiki-dark-text-decoration);
@@ -870,6 +885,20 @@
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.25em 0;
+}
+.ink-prose .math-source {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.ink-prose .math-block.math-source {
+  margin: 0.9em 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  background: var(--bg-inset);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .ink-prose .math-error {
   color: var(--danger);

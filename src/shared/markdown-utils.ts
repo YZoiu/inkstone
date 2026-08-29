@@ -195,6 +195,7 @@ function tagSearchText(text: string): string {
     while (text[markerEnd] === '`') markerEnd++
     const markerLength = markerEnd - i
     let closing = markerEnd
+    let matched = false
     while (closing < text.length) {
       closing = text.indexOf('`', closing)
       if (closing < 0) break
@@ -203,11 +204,12 @@ function tagSearchText(text: string): string {
       if (closingEnd - closing === markerLength) {
         protect(i, closingEnd)
         i = closingEnd
+        matched = true
         break
       }
       closing = closingEnd
     }
-    if (closing < 0) i = markerEnd
+    if (!matched) i = markerEnd
   }
 
   const protectPattern = (pattern: RegExp) => {

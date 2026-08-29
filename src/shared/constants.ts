@@ -86,6 +86,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
     showToc: true,
     math: true,
     mermaid: true,
+    codeBlockCollapse: true,
+    codeBlockCollapseLines: 24,
   },
   backup: {
     schedule: 'sixHourly',
@@ -184,6 +186,13 @@ export function mergeSettings(partial: unknown): UserSettings {
   base.preview.showToc = booleanValue(preview.showToc, base.preview.showToc)
   base.preview.math = booleanValue(preview.math, base.preview.math)
   base.preview.mermaid = booleanValue(preview.mermaid, base.preview.mermaid)
+  base.preview.codeBlockCollapse = booleanValue(preview.codeBlockCollapse, base.preview.codeBlockCollapse)
+  base.preview.codeBlockCollapseLines = integerInRange(
+    preview.codeBlockCollapseLines,
+    8,
+    100,
+    base.preview.codeBlockCollapseLines,
+  )
 
   base.backup.schedule = enumValue(
     backup.schedule,

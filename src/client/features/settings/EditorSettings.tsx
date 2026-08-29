@@ -59,6 +59,14 @@ export function EditorSettings() {
           <Switch checked={preview.mermaid} onChange={(mermaid) => void update({ preview: { mermaid } })} label={t("settings.diagram")}/>
         </SettingRow>
 
+        <SettingRow title={t("settings.collapse_long_code_blocks")} description={t("settings.collapse_long_code_blocks_description")}>
+          <Switch checked={preview.codeBlockCollapse} onChange={(codeBlockCollapse) => void update({ preview: { codeBlockCollapse } })} label={t("settings.collapse_long_code_blocks")}/>
+        </SettingRow>
+
+        {preview.codeBlockCollapse && <SettingRow title={t("settings.code_block_collapse_after")}>
+          <Slider label={t("settings.code_block_collapse_after")} className="w-[200px]" value={preview.codeBlockCollapseLines} min={8} max={100} step={1} onChange={(codeBlockCollapseLines) => void update({ preview: { codeBlockCollapseLines } })} suffix={t("settings.lines")}/>
+        </SettingRow>}
+
         <SettingRow title={t("settings.show_outline_by_default")}>
           <Switch checked={preview.showToc} onChange={(showToc) => void update({ preview: { showToc } })} label={t("settings.show_outline_by_default")}/>
         </SettingRow>

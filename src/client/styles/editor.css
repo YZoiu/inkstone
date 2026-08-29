@@ -149,14 +149,9 @@
 }
 .cm-md-code {
   font-family: var(--font-mono);
-  font-size: 0.9em;
   font-weight: var(--code-weight, 400);
   letter-spacing: var(--code-spacing, -0.012em);
-  background: var(--bg-inset);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-xs);
-  padding: 0.08em 0.28em;
-  color: var(--code-inline-fg);
+  color: inherit;
 }
 .cm-md-quote {
   color: var(--text-secondary);

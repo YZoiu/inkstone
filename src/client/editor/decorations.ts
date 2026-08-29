@@ -1,11 +1,8 @@
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
-import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
+import { RangeSetBuilder, StateEffect } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 
 
-const codeBlockLine = Decoration.line({ class: 'cm-md-codeblock-line' })
-const codeBlockOpen = Decoration.line({ class: 'cm-md-codeblock-line cm-md-codeblock-open' })
-const codeBlockClose = Decoration.line({ class: 'cm-md-codeblock-line cm-md-codeblock-close' })
 const taskDone = Decoration.mark({ class: 'cm-md-task-done' })
 const tagMark = Decoration.mark({ class: 'cm-md-tag' })
 const wikiMark = Decoration.mark({ class: 'cm-md-wikilink' })
@@ -30,18 +27,6 @@ function buildDecorations(view: EditorView): DecorationSet {
         }
       },
     })
-
-    const lineDecorations: { pos: number; deco: Decoration }[] = []
-    for (const block of fenced) {
-      const startLine = view.state.doc.lineAt(Math.max(block.from, 0)).number
-      const endLine = view.state.doc.lineAt(Math.min(block.to, view.state.doc.length)).number
-      for (let n = startLine; n <= endLine; n++) {
-        const line = view.state.doc.line(n)
-        const deco = n === startLine ? codeBlockOpen : n === endLine ? codeBlockClose : codeBlockLine
-        lineDecorations.push({ pos: line.from, deco })
-      }
-    }
-
 
     const markDecorations: { from: number; to: number; deco: Decoration }[] = []
     const startLine = view.state.doc.lineAt(from).number
@@ -83,7 +68,6 @@ function buildDecorations(view: EditorView): DecorationSet {
 
 
     const all = [
-      ...lineDecorations.map((d) => ({ from: d.pos, to: d.pos, deco: d.deco, line: true })),
       ...markDecorations.map((d) => ({ ...d, line: false })),
     ].sort((a, b) => a.from - b.from || (a.line === b.line ? 0 : a.line ? -1 : 1))
 
@@ -115,19 +99,6 @@ export const setFocusMode = StateEffect.define<boolean>()
 
 const focusParagraph = Decoration.line({ class: 'cm-focus-paragraph' })
 
-export const focusModeField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(value, tr) {
-    let enabled = false
-    for (const effect of tr.effects) {
-      if (effect.is(setFocusMode)) enabled = effect.value
-    }
-    if (!enabled && !tr.docChanged && !tr.selection && value === Decoration.none) return value
-    return value.map(tr.changes)
-  },
-  provide: (field) => EditorView.decorations.from(field),
-})
-
 
 export const focusModePlugin = ViewPlugin.fromClass(
   class {
@@ -138,7 +109,10 @@ export const focusModePlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      const modeChanged = update.transactions.some((transaction) =>
+        transaction.effects.some((effect) => effect.is(setFocusMode)),
+      )
+      if (update.docChanged || update.selectionSet || update.viewportChanged || modeChanged) {
         this.compute(update.view)
       }
     }

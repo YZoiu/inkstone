@@ -184,16 +184,13 @@ export function Workspace({ mobileLayout = 'edit', onMobileBack, pane = 'active'
     }, [view]);
     const invalidateSyncAnchors = useSyncScroll(view, previewScrollerRef, settings.preview.syncScroll && layout === 'split');
     const jumpToHeading = useCallback((heading: Heading) => {
-        const scroller = previewScrollerRef.current;
-        const target = scroller?.querySelector<HTMLElement>(`#${CSS.escape(heading.slug)}`);
-        if (target && scroller) {
-            scroller.scrollTo({ top: target.offsetTop - 12, behavior: preferredScrollBehavior() });
-        }
         if (view) {
             const line = Math.min(view.state.doc.lines, heading.line + 1);
             const pos = view.state.doc.line(line).from;
             view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
         }
+        const target = previewScrollerRef.current?.querySelector<HTMLElement>(`#${CSS.escape(heading.slug)}`);
+        target?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start', inline: 'nearest' });
     }, [view]);
     useEffect(() => {
         if (!note || !paneActive)

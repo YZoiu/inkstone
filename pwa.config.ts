@@ -20,12 +20,21 @@ const OPTIONAL_PUBLIC_ASSETS = [
 
 const PUBLIC_ASSETS = [...CORE_PUBLIC_ASSETS, ...OPTIONAL_PUBLIC_ASSETS] as const
 
+const CORE_LAZY_MODULES = [
+  '/src/client/App.tsx',
+  '/src/client/features/shell/AppShell.tsx',
+  '/src/client/features/workspace/Workspace.tsx',
+  '/src/shared/locales/en-US.ts',
+  '/src/shared/locales/zh-CN.ts',
+] as const
+
 type BuildChunk = {
   type: 'chunk'
   fileName: string
   code: string
   isEntry: boolean
   imports: string[]
+  facadeModuleId: string | null
   viteMetadata?: {
     importedCss?: Set<string>
   }
@@ -83,7 +92,8 @@ export function inkstonePwa(): Plugin {
 function collectCoreFiles(bundle: BuildBundle): string[] {
   const files = new Set<string>(['index.html', ...CORE_PUBLIC_ASSETS])
   const pending = Object.values(bundle)
-    .filter((entry): entry is BuildChunk => entry.type === 'chunk' && entry.isEntry)
+    .filter((entry): entry is BuildChunk =>
+      entry.type === 'chunk' && (entry.isEntry || isCoreLazyChunk(entry)))
 
   while (pending.length) {
     const chunk = pending.pop()!
@@ -110,6 +120,11 @@ function collectCoreFiles(bundle: BuildBundle): string[] {
   }
 
   return [...files].sort()
+}
+
+function isCoreLazyChunk(chunk: BuildChunk): boolean {
+  const moduleId = chunk.facadeModuleId?.replaceAll('\\', '/')
+  return Boolean(moduleId && CORE_LAZY_MODULES.some((suffix) => moduleId.endsWith(suffix)))
 }
 
 function serviceWorkerSource(buildId: string, coreUrls: string[], allUrls: string[]): string {
@@ -146,7 +161,7 @@ self.addEventListener('message', (event) => {
     return
   }
   if (event.data?.type === 'WARM_OFFLINE_CACHE') {
-    event.waitUntil(warmOfflineCache(true))
+    event.waitUntil(warmOfflineCache(false))
   }
 })
 
@@ -224,10 +239,13 @@ async function runOfflineWarmup(notifyWhenComplete) {
     return
   }
   let completed = await countAvailable()
+  let processed = 0
   await broadcastStatus('preparing', completed, ALL_OFFLINE_URLS.length, false)
 
   try {
-    await forEachConcurrent(OPTIONAL_URLS, 3, async (url) => {
+    // Fill the complete offline cache quietly after the app is ready. A single
+    // request at a time plus a short yield keeps foreground traffic responsive.
+    await forEachConcurrent(OPTIONAL_URLS, 1, async (url) => {
       if (isImmutableAsset(url) && await assets.match(url)) return
       const reused = isImmutableAsset(url)
         ? await caches.match(url, { ignoreSearch: true })
@@ -235,7 +253,11 @@ async function runOfflineWarmup(notifyWhenComplete) {
       const response = reused || await fetchRequired(url)
       await assets.put(url, response.clone())
       if (!reused) completed++
-      await broadcastStatus('preparing', completed, ALL_OFFLINE_URLS.length, false)
+      processed++
+      if (processed % 8 === 0) {
+        await broadcastStatus('preparing', completed, ALL_OFFLINE_URLS.length, false)
+      }
+      await pauseBackgroundWarmup()
     })
     await writeCurrentManifest(assets)
     await pruneAssetCache(assets)
@@ -306,6 +328,10 @@ async function fetchRequired(url) {
     throw new Error('Failed to cache ' + url + ': HTML fallback')
   }
   return response
+}
+
+function pauseBackgroundWarmup() {
+  return new Promise((resolve) => setTimeout(resolve, 75))
 }
 
 function isHtmlServedAsAsset(path, response) {

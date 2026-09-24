@@ -34,7 +34,29 @@ export function stripCodeRegions(text: string): string {
     }
     lines[i] = line.replace(/`+[^`\n]*`+/g, (s) => ' '.repeat(s.length))
   }
-  return lines.join('\n')
+  return stripObsidianCommentRegions(lines.join('\n'))
+}
+
+function stripObsidianCommentRegions(text: string): string {
+  const chars = text.split('')
+  let start = -1
+  for (let index = 0; index < text.length - 1; index++) {
+    if (!text.startsWith('%%', index) || isEscaped(text, index)) continue
+    if (start < 0) start = index
+    else {
+      for (let cursor = start; cursor <= index + 1; cursor++) {
+        if (chars[cursor] !== '\n' && chars[cursor] !== '\r') chars[cursor] = ' '
+      }
+      start = -1
+    }
+    index++
+  }
+  if (start >= 0) {
+    for (let cursor = start; cursor < chars.length; cursor++) {
+      if (chars[cursor] !== '\n' && chars[cursor] !== '\r') chars[cursor] = ' '
+    }
+  }
+  return chars.join('')
 }
 
 export interface FrontMatterResult {
@@ -231,6 +253,18 @@ function tagSearchText(text: string): string {
   protectPattern(/\$\$(?:[\s\S]*?\$\$|[\s\S]*$)/g)
   protectPattern(/\$(?!\s)(?:[^$\\]|\\.)+?(?<!\s)\$/g)
 
+  let commentStart = -1
+  for (let index = 0; index < text.length - 1; index++) {
+    if (protectedChars[index] || !text.startsWith('%%', index) || isEscaped(text, index)) continue
+    if (commentStart < 0) commentStart = index
+    else {
+      protect(commentStart, index + 2)
+      commentStart = -1
+    }
+    index++
+  }
+  if (commentStart >= 0) protect(commentStart, text.length)
+
   lineStart = 0
   while (lineStart < text.length) {
     const newline = text.indexOf('\n', lineStart)
@@ -413,10 +447,45 @@ const ATTACHMENT_REFERENCE_RE =
 
 
 export function extractAttachmentIds(content: string): string[] {
-  const safe = stripCodeRegions(splitFrontMatter(content).body)
+  const body = splitFrontMatter(content).body
   const ids = new Set<string>()
-  for (const match of safe.matchAll(ATTACHMENT_REFERENCE_RE)) ids.add(match[1]!)
+  for (const match of stripCodeRegions(body).matchAll(ATTACHMENT_REFERENCE_RE)) ids.add(match[1]!)
+  // md-example fences are rendered as live markdown by the client renderer,
+  // so references inside them count even though stripCodeRegions discards
+  // them as ordinary code regions.
+  for (const inner of markdownExampleBodies(body)) {
+    for (const id of extractAttachmentIds(inner)) ids.add(id)
+  }
   return [...ids]
+}
+
+function markdownExampleBodies(text: string): string[] {
+  const bodies: string[] = []
+  const lines = text.split('\n')
+  let fenceChar = ''
+  let fenceLen = 0
+  let collecting: string[] | null = null
+  for (const line of lines) {
+    const fence = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    if (fence) {
+      const marker = fence[1]!
+      if (collecting === null) {
+        if (/^\s*(?:md-example|markdown-example)\b/.test(fence[2] ?? '')) {
+          fenceChar = marker[0]!
+          fenceLen = marker.length
+          collecting = []
+        }
+      } else if (marker[0]! === fenceChar && marker.length >= fenceLen && !(fence[2] ?? '').trim()) {
+        // A closing fence may only be followed by spaces or tabs.
+        bodies.push(collecting.join('\n'))
+        collecting = null
+      }
+      continue
+    }
+    if (collecting !== null) collecting.push(line)
+  }
+  if (collecting) bodies.push(collecting.join('\n'))
+  return bodies
 }
 
 export function normalizeLinkKey(title: string): string {
@@ -629,7 +698,6 @@ export function toPlainText(md: string): string {
   t = t.replace(/(\*|_)(.*?)\1/g, '$2')
   t = t.replace(/~~(.*?)~~/g, '$1')
   t = t.replace(/==(.*?)==/g, '$1')
-  t = t.replace(/\+\+(.*?)\+\+/g, '$1')
   t = t.replace(/<[^>]{1,300}>/g, '')
   t = t.replace(/^\[\^[^\]]+\]:/gm, '')
   t = t.replace(/\[\^[^\]]+\]/g, '')

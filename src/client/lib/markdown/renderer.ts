@@ -5,11 +5,6 @@ import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
 import anchor from 'markdown-it-anchor';
 import mark from 'markdown-it-mark';
-import ins from 'markdown-it-ins';
-import sub from 'markdown-it-sub';
-import sup from 'markdown-it-sup';
-import deflist from 'markdown-it-deflist';
-import multimdTable from 'markdown-it-multimd-table';
 import DOMPurify from 'dompurify';
 import { parseFrontMatter, slugifyHeading } from '@shared/markdown-utils';
 import { getLocale, t } from '../i18n';
@@ -54,10 +49,6 @@ export interface FenceInfo {
     lineNumbers: boolean;
     startLine: number;
     highlightedLines: number[];
-    attrs: Array<[
-        string,
-        string
-    ]>;
 }
 const md = new MarkdownIt({
     html: true,
@@ -69,11 +60,6 @@ const md = new MarkdownIt({
 md.use(taskLists, { enabled: true, label: false })
     .use(footnote)
     .use(mark)
-    .use(ins)
-    .use(sub)
-    .use(sup)
-    .use(deflist)
-    .use(multimdTable, { multiline: true, rowspan: true, headerless: true })
     .use(anchor, {
     slugify: slugifyHeading,
 
@@ -327,7 +313,7 @@ md.inline.ruler.before('text', 'inline_tag', (state, silent) => {
 md.renderer.rules.note_embed = (tokens, index) => {
     const parsed = parseWikiTarget(tokens[index]!.content);
     const label = parsed.alias || parsed.raw;
-    return `<span class="note-embed loading" data-embed-target="${escapeAttr(encodeDataValue(parsed.raw))}"><span class="note-embed-head">${escapeHtml(label)}</span><span class="note-embed-body" aria-busy="true">${escapeHtml(t("common.loading"))}</span></span>`;
+    return `<div class="note-embed loading" data-embed-target="${escapeAttr(encodeDataValue(parsed.raw))}"><span class="note-embed-head">${escapeHtml(label)}</span><div class="note-embed-body" aria-busy="true">${escapeHtml(t("common.loading"))}</div></div>`;
 };
 md.renderer.rules.wikilink = (tokens, index) => {
     const parsed = parseWikiTarget(tokens[index]!.content);
@@ -339,46 +325,17 @@ md.renderer.rules.block_reference = (tokens, index) => {
     return `<a class="block-reference" data-block-ref="${escapeAttr(id)}" href="#%5E${escapeAttr(id)}">((${escapeHtml(id)}))</a>`;
 };
 md.renderer.rules.inline_tag = (tokens, index) => `<span class="inline-tag" data-tag="${escapeAttr(encodeDataValue(tokens[index]!.content))}" role="link" tabindex="0">#${escapeHtml(tokens[index]!.content)}</span>`;
-md.inline.ruler.before('link', 'pandoc_span', (state, silent) => {
-    if (state.src[state.pos] !== '[')
-        return false;
-    const match = /^\[([^\]\n]+)\]\{([^{}\n]+)\}/.exec(state.src.slice(state.pos));
-    if (!match)
-        return false;
-    const attrs = parsePandocAttributes(match[2]!);
-    if (!attrs.length)
-        return false;
-    if (!silent) {
-        const open = state.push('pandoc_span_open', 'span', 1);
-        open.attrs = attrs;
-        const children: Token[] = [];
-        state.md.inline.parse(match[1]!, state.md, state.env, children);
-        state.tokens.push(...children);
-        state.push('pandoc_span_close', 'span', -1);
-    }
-    state.pos += match[0].length;
-    return true;
-});
-md.core.ruler.before('github-task-lists', 'pandoc_attributes_and_blocks', (state) => {
+md.core.ruler.before('github-task-lists', 'obsidian_blocks', (state) => {
     const seenBlockIds = new Set<string>();
     for (let index = 0; index < state.tokens.length; index++) {
         const inline = state.tokens[index]!;
         if (inline.type !== 'inline')
             continue;
         expandBlockReferences(inline, state.Token);
-        applyInlineElementAttributes(inline);
         const opening = findOpeningToken(state.tokens, index);
         if (!opening)
             continue;
         let content = inline.content;
-        const attributes = /(?:^|\s)\{([^{}\n]+)\}\s*$/.exec(content);
-        if (attributes) {
-            const attrs = parsePandocAttributes(attributes[1]!);
-            if (attrs.length) {
-                attrs.forEach(([name, value]) => setTokenAttribute(opening, name, value));
-                content = content.slice(0, attributes.index).trimEnd();
-            }
-        }
         const block = /(?:^|\s)\^([A-Za-z0-9][A-Za-z0-9_-]{0,63})\s*$/.exec(content);
         if (block) {
             let id = block[1]!;
@@ -436,15 +393,17 @@ md.core.ruler.after('github-task-lists', 'obsidian_callouts', (state) => {
     return true;
 });
 md.renderer.rules.callout_open = (tokens, index) => {
+    const sourceLine = tokens[index]!.map?.[0];
+    const line = sourceLine === undefined ? '' : ` data-line="${sourceLine}"`;
     const { type, title, fold } = tokens[index]!.meta as {
         type: string;
         title: string;
         fold: string;
     };
     if (fold) {
-        return `<details class="callout callout-${escapeAttr(type)}" data-callout="${escapeAttr(type)}"${fold === '+' ? ' open' : ''}><summary class="callout-title">${escapeHtml(title)}</summary><div class="callout-content">`;
+        return `<details class="callout callout-${escapeAttr(type)}" data-callout="${escapeAttr(type)}"${line}${fold === '+' ? ' open' : ''}><summary class="callout-title">${escapeHtml(title)}</summary><div class="callout-content">`;
     }
-    return `<aside class="callout callout-${escapeAttr(type)}" data-callout="${escapeAttr(type)}"><div class="callout-title">${escapeHtml(title)}</div><div class="callout-content">`;
+    return `<aside class="callout callout-${escapeAttr(type)}" data-callout="${escapeAttr(type)}"${line}><div class="callout-title">${escapeHtml(title)}</div><div class="callout-content">`;
 };
 md.renderer.rules.callout_close = (tokens, index) => `</div>${(tokens[index]!.meta as {
     fold: string;
@@ -482,6 +441,23 @@ md.core.ruler.after('github-task-lists', 'trusted_task_placeholders', (state) =>
     }
     return true;
 });
+md.core.ruler.after('trusted_task_placeholders', 'block_note_embeds', (state) => {
+    for (let index = 1; index < state.tokens.length - 1; index++) {
+        const inline = state.tokens[index]!;
+        const open = state.tokens[index - 1]!;
+        const close = state.tokens[index + 1]!;
+        if (inline.type !== 'inline' || open.type !== 'paragraph_open' || close.type !== 'paragraph_close' ||
+            !inline.children?.some((child) => child.type === 'note_embed')) {
+            continue;
+        }
+        open.type = 'note_embed_paragraph_open';
+        open.tag = 'div';
+        open.attrJoin('class', 'note-embed-paragraph');
+        close.type = 'note_embed_paragraph_close';
+        close.tag = 'div';
+    }
+    return true;
+});
 md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
     const token = tokens[index]!;
     const info = parseFenceInfo(token.info);
@@ -494,7 +470,7 @@ md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
         childEnv.tabSequence = parentEnv.tabSequence;
         childEnv.exampleSequence = parentEnv.exampleSequence;
         childEnv.docId = `${parentEnv.docId}-example-${exampleId}`;
-        const preview = md.render(token.content, childEnv).replace(/ data-line="\d+"/g, '');
+        const preview = md.render(stripObsidianComments(token.content), childEnv).replace(/ data-line="\d+"/g, '');
         parentEnv.hasMath ||= childEnv.hasMath;
         parentEnv.hasMermaid ||= childEnv.hasMermaid;
         parentEnv.hasEmbeds ||= childEnv.hasEmbeds;
@@ -512,7 +488,7 @@ md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
             `<section class="markdown-example-source" aria-label="Markdown">`,
             `<div class="code-block markdown-example-code" data-lang="markdown" data-code-start="1">`,
             `<button class="code-copy markdown-example-copy" data-copy type="button" aria-label="${escapeAttr(t("markdown.copy_code"))}">${escapeHtml(t("common.copy"))}</button>`,
-            `<pre class="shiki-pending"><code>${escapeHtml(token.content)}</code></pre>`,
+            `<pre><code>${escapeHtml(token.content)}</code></pre>`,
             `</div>`,
             `</section>`,
             `</div>`,
@@ -523,21 +499,15 @@ md.renderer.rules.fence = (tokens, index, _options, rendererEnv) => {
         renderEnv(rendererEnv).hasMermaid = true;
         return `<div class="mermaid-block loading"${line} data-mermaid="${escapeAttr(encodeDataValue(token.content))}" aria-busy="true">${escapeHtml(t("markdown.rendering_diagram"))}</div>`;
     }
-    const attrs = info.attrs
-        .filter(([name]) => name !== 'id' && name !== 'class' && !isCodeMetadataAttribute(name))
-        .map(([name, value]) => ` ${name}="${escapeAttr(value)}"`)
-        .join('');
-    const id = info.attrs.find(([name]) => name === 'id')?.[1];
-    const classes = info.attrs.filter(([name]) => name === 'class').map(([, value]) => value);
     const title = info.title || info.language || t("markdown.code");
     return [
-        `<div class="code-block${classes.length ? ` ${escapeAttr(classes.join(' '))}` : ''}"${id ? ` id="${escapeAttr(id)}"` : ''}${line} data-lang="${escapeAttr(info.language)}" data-code-start="${info.startLine}"${info.lineNumbers ? ' data-line-numbers="true"' : ''}${info.highlightedLines.length ? ` data-highlight-lines="${info.highlightedLines.join(',')}"` : ''}${attrs}>`,
+        `<div class="code-block"${line} data-lang="${escapeAttr(info.language)}" data-code-start="${info.startLine}"${info.lineNumbers ? ' data-line-numbers="true"' : ''}${info.highlightedLines.length ? ` data-highlight-lines="${info.highlightedLines.join(',')}"` : ''}>`,
         `<div class="code-block-head">`,
         `<span class="code-title">${escapeHtml(title)}</span>`,
         info.title && info.language ? `<span class="code-lang">${escapeHtml(info.language)}</span>` : '',
         `<button class="code-copy" data-copy type="button" aria-label="${escapeAttr(t("markdown.copy_code"))}">${escapeHtml(t("common.copy"))}</button>`,
         `</div>`,
-        `<pre class="shiki-pending"><code>${escapeHtml(token.content)}</code></pre>`,
+        `<pre><code>${escapeHtml(token.content)}</code></pre>`,
         `</div>`,
     ].join('');
 };
@@ -625,7 +595,6 @@ const PURIFY_CONFIG = {
         'referrerpolicy',
         'align',
         'colspan',
-        'rowspan',
         'open',
         'hidden',
         'role',
@@ -661,9 +630,36 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
         node.setAttribute('rel', 'noopener noreferrer');
     }
 });
+export interface MarkdownBlock {
+    startLine: number;
+    endLine: number;
+    html: string;
+}
+
+/** Parse once with the full document environment so reference links retain their targets. */
+export function renderMarkdownBlocks(source: string): { blocks: MarkdownBlock[]; headings: Heading[] } {
+    const env = emptyEnvironment();
+    const tokens = md.parse(stripObsidianComments(source), env);
+    const blocks: MarkdownBlock[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i]!;
+        if (!token.map || token.level !== 0 || token.nesting === -1) continue;
+        let end = i + 1;
+        if (token.nesting === 1) {
+            let depth = 1;
+            while (end < tokens.length && depth > 0) depth += tokens[end++]!.nesting;
+        }
+        const raw = md.renderer.render(tokens.slice(i, end), md.options, env);
+        const html = materializeTrustedTasks(DOMPurify.sanitize(raw, PURIFY_CONFIG), env.taskNonce);
+        if (html.trim()) blocks.push({ startLine: token.map[0], endLine: token.map[1], html });
+        i = end - 1;
+    }
+    return { blocks, headings: env.headings };
+}
+
 export function renderMarkdown(source: string): RenderResult {
     const env = emptyEnvironment();
-    const raw = md.render(source, env);
+    const raw = md.render(stripObsidianComments(source), env);
     const sanitized = DOMPurify.sanitize(raw, PURIFY_CONFIG);
     const html = materializeTrustedTasks(sanitized, env.taskNonce);
     return {
@@ -675,6 +671,57 @@ export function renderMarkdown(source: string): RenderResult {
         frontMatter: env.frontMatter,
         frontMatterErrors: env.frontMatterErrors,
     };
+}
+
+function stripObsidianComments(source: string): string {
+    const lines = source.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(Boolean) ?? [];
+    let inComment = false;
+    let fenceChar = '';
+    let fenceLength = 0;
+    return lines.map((line) => {
+        const ending = /\r\n$|[\r\n]$/.exec(line)?.[0] ?? '';
+        const body = ending ? line.slice(0, -ending.length) : line;
+        const fence = !inComment ? /^ {0,3}(`{3,}|~{3,})/.exec(body) : null;
+        if (fence) {
+            const marker = fence[1]!;
+            if (!fenceChar) {
+                fenceChar = marker[0]!;
+                fenceLength = marker.length;
+            }
+            else if (marker[0] === fenceChar && marker.length >= fenceLength) {
+                fenceChar = '';
+                fenceLength = 0;
+            }
+            return line;
+        }
+        if (fenceChar)
+            return line;
+        let output = '';
+        let inlineTicks = 0;
+        for (let index = 0; index < body.length;) {
+            if (body[index] === '`' && !inComment) {
+                let end = index + 1;
+                while (body[end] === '`')
+                    end++;
+                const ticks = end - index;
+                if (!inlineTicks || inlineTicks === ticks)
+                    inlineTicks = inlineTicks ? 0 : ticks;
+                output += body.slice(index, end);
+                index = end;
+                continue;
+            }
+            const marker = body.startsWith('%%', index) && body[index - 1] !== '\\';
+            if (marker && !inlineTicks) {
+                inComment = !inComment;
+                output += '  ';
+                index += 2;
+                continue;
+            }
+            output += inComment ? ' ' : body[index]!;
+            index++;
+        }
+        return output + ending;
+    }).join('');
 }
 export function parseWikiTarget(source: string): WikiTarget {
     const pipe = source.indexOf('|');
@@ -703,31 +750,24 @@ export function parseWikiTarget(source: string): WikiTarget {
 export function parseFenceInfo(source: string): FenceInfo {
     let rest = source.trim();
     let language = '';
-    const attrs: Array<[
-        string,
-        string
-    ]> = [];
     let title = '';
     let lineNumbers = false;
     let startLine = 1;
     const highlighted = new Set<number>();
-    const leadingPandoc = /^\{([^{}]+)\}/.exec(rest);
-    if (leadingPandoc && !/^\d[\d,\s-]*$/.test(leadingPandoc[1]!.trim())) {
-        const parsed = parsePandocAttributes(leadingPandoc[1]!);
-        attrs.push(...parsed);
-        const classes = parsed
-            .filter(([name]) => name === 'class')
-            .flatMap(([, value]) => value.split(/\s+/).filter(Boolean));
+    const leadingCodeOptions = /^\{([^{}]+)\}/.exec(rest);
+    if (leadingCodeOptions && !/^\d[\d,\s-]*$/.test(leadingCodeOptions[1]!.trim())) {
+        const classes = [...leadingCodeOptions[1]!.matchAll(/(?:^|\s)\.([A-Za-z][\w-]{0,63})/g)]
+            .map((match) => match[1]!);
         language = classes.find((className) => !isReservedCodeClass(className))?.toLowerCase() ?? '';
         lineNumbers = classes.some(isReservedCodeClass);
-        title = parsed.find(([name]) => name === 'title')?.[1] ?? '';
-        const startAttribute = parsed.find(([name]) => name === 'start' || name === 'startfrom')?.[1];
+        title = codeMetadataValue(leadingCodeOptions[1]!, 'title') ?? '';
+        const startAttribute = codeMetadataValue(leadingCodeOptions[1]!, 'start', 'startfrom');
         if (startAttribute && /^\d+$/.test(startAttribute))
             startLine = clamp(Number(startAttribute), 1, 100000);
-        const highlightAttribute = parsed.find(([name]) => name === 'hl_lines' || name === 'highlight')?.[1];
+        const highlightAttribute = codeMetadataValue(leadingCodeOptions[1]!, 'hl_lines', 'highlight');
         if (highlightAttribute)
             parseLineSpec(highlightAttribute).forEach((line) => highlighted.add(line));
-        rest = rest.slice(leadingPandoc[0].length).trim();
+        rest = rest.slice(leadingCodeOptions[0].length).trim();
     }
     if (!language) {
         const lang = /^([^\s{]+)/.exec(rest);
@@ -759,46 +799,7 @@ export function parseFenceInfo(source: string): FenceInfo {
         lineNumbers,
         startLine,
         highlightedLines: [...highlighted].sort((a, b) => a - b),
-        attrs,
     };
-}
-export function parsePandocAttributes(source: string): Array<[
-    string,
-    string
-]> {
-    const attrs: Array<[
-        string,
-        string
-    ]> = [];
-    const classes: string[] = [];
-    const pattern = /(?:^|\s)(#[A-Za-z][\w:.-]{0,63}|\.[A-Za-z][\w-]{0,63}|[A-Za-z][\w:-]*(?:=(?:"[^"]*"|'[^']*'|[^\s]+))?)/g;
-    for (const match of source.matchAll(pattern)) {
-        const part = match[1]!;
-        if (part.startsWith('#')) {
-            attrs.push(['id', part.slice(1)]);
-            continue;
-        }
-        if (part.startsWith('.')) {
-            classes.push(part.slice(1));
-            continue;
-        }
-        const equals = part.indexOf('=');
-        const name = equals >= 0 ? part.slice(0, equals) : part;
-        let value = equals >= 0 ? part.slice(equals + 1) : name;
-        value = value.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, '$1$2');
-        const normalized = name.toLowerCase();
-        if (/^on/.test(normalized) || ['style', 'src', 'href', 'action', 'formaction', 'srcdoc'].includes(normalized)) {
-            continue;
-        }
-        if (['title', 'width', 'height', 'lang', 'dir', 'open', 'start', 'startfrom', 'hl_lines', 'highlight'].includes(normalized) ||
-            /^aria-[a-z-]+$/.test(normalized) ||
-            /^data-[a-z0-9-]+$/.test(normalized)) {
-            attrs.push([normalized, value.slice(0, 512)]);
-        }
-    }
-    if (classes.length)
-        attrs.push(['class', classes.join(' ')]);
-    return attrs;
 }
 function emptyEnvironment(): RenderEnvironment {
     const nonce = createNonce();
@@ -1081,41 +1082,6 @@ function findOpeningToken(tokens: Token[], inlineIndex: number): Token | null {
         return previous;
     return null;
 }
-function applyInlineElementAttributes(inline: Token): void {
-    const children = inline.children;
-    if (!children)
-        return;
-    for (let index = 1; index < children.length; index++) {
-        const text = children[index]!;
-        if (text.type !== 'text')
-            continue;
-        const match = /^\{([^{}\n]+)\}/.exec(text.content);
-        if (!match)
-            continue;
-        const attrs = parsePandocAttributes(match[1]!);
-        if (!attrs.length)
-            continue;
-        const previous = children[index - 1]!;
-        let target: Token | undefined;
-        if (previous.type === 'image')
-            target = previous;
-        else if (previous.type === 'link_close') {
-            let depth = 0;
-            for (let cursor = index - 1; cursor >= 0; cursor--) {
-                if (children[cursor]!.type === 'link_close')
-                    depth++;
-                if (children[cursor]!.type === 'link_open' && --depth === 0) {
-                    target = children[cursor];
-                    break;
-                }
-            }
-        }
-        if (!target)
-            continue;
-        attrs.forEach(([name, value]) => setTokenAttribute(target!, name, value));
-        text.content = text.content.slice(match[0].length);
-    }
-}
 function expandBlockReferences(inline: Token, TokenConstructor: new (type: string, tag: string, nesting: -1 | 0 | 1) => Token): void {
     if (!inline.children)
         return;
@@ -1185,8 +1151,14 @@ function parseLineSpec(source: string): number[] {
 function isReservedCodeClass(value: string): boolean {
     return ['numberlines', 'line-numbers', 'linenos'].includes(value.toLowerCase());
 }
-function isCodeMetadataAttribute(name: string): boolean {
-    return ['title', 'start', 'startfrom', 'hl_lines', 'highlight'].includes(name.toLowerCase());
+function codeMetadataValue(source: string, ...names: string[]): string | null {
+    const wanted = new Set(names.map((name) => name.toLowerCase()));
+    const pattern = /(?:^|\s)([A-Za-z][\w-]*)=(?:"([^"]*)"|'([^']*)'|([^\s]+))/g;
+    for (const match of source.matchAll(pattern)) {
+        if (wanted.has(match[1]!.toLowerCase()))
+            return (match[2] ?? match[3] ?? match[4] ?? '').slice(0, 512);
+    }
+    return null;
 }
 function localizeFrontMatterError(error: string): string {
     if (error === 'Front Matter exceeds the 64 KiB safety limit')

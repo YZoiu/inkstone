@@ -1,12 +1,11 @@
-# Keep this fork identical to upstream, then let Cloudflare Workers Git
-# integration deploy whatever lands on main.
+# Keep this fork deploying on Cloudflare while tracking shuaiplus/inkstone.
 #
-# Flow:
-#   shuaiplus/inkstone (upstream)
-#     -> this workflow merges into YZoiu/inkstone@main
-#     -> Cloudflare Workers (connected Git repo) builds and deploys
+# GitHub's merge-upstream API aborts the whole run on the first conflict.
+# This job merges in git instead, prefers upstream for conflicting hunks,
+# then reapplies the fork-only Cloudflare overlays.
 #
-# GitHub scheduled workflows cannot run more often than every ~5 minutes.
+# GitHub scheduled workflows cannot run more often than every ~5 minutes,
+# and the schedule is often delayed.
 name: Sync upstream
 
 on:
@@ -28,53 +27,93 @@ jobs:
     name: Merge upstream into fork
     runs-on: ubuntu-latest
     steps:
-      - name: Sync fork with shuaiplus/inkstone
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge upstream and reapply fork overlays
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_REPO: shuaiplus/inkstone
           UPSTREAM_BRANCH: main
         run: |
           set -euo pipefail
 
-          repo="${GITHUB_REPOSITORY}"
-          branch="${GITHUB_REF_NAME}"
-          owner="${GITHUB_REPOSITORY_OWNER}"
-          compare="${owner}:${branch}...${UPSTREAM_REPO%%/*}:${UPSTREAM_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          echo "Comparing ${compare}"
-          ahead_by="$(gh api "repos/${UPSTREAM_REPO}/compare/${compare}" --jq .ahead_by)"
-          behind_by="$(gh api "repos/${UPSTREAM_REPO}/compare/${compare}" --jq .behind_by)"
-          upstream_sha="$(gh api "repos/${UPSTREAM_REPO}/commits/${UPSTREAM_BRANCH}" --jq .sha)"
-          fork_sha="$(gh api "repos/${repo}/commits/${branch}" --jq .sha)"
+          git fetch origin main
+          git checkout -B main origin/main
+
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream "https://github.com/${UPSTREAM_REPO}.git"
+          else
+            git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          fi
+          git fetch upstream "${UPSTREAM_BRANCH}"
+          upstream_ref="upstream/${UPSTREAM_BRANCH}"
+          upstream_sha="$(git rev-parse "${upstream_ref}")"
+          fork_sha="$(git rev-parse HEAD)"
 
           echo "upstream_sha=${upstream_sha}"
           echo "fork_sha=${fork_sha}"
-          echo "upstream_ahead=${ahead_by}"
-          echo "fork_unique=${behind_by}"
-
           {
             echo "## Fork sync"
             echo ""
             echo "- Upstream: \`${UPSTREAM_REPO}@${UPSTREAM_BRANCH}\` (\`${upstream_sha}\`)"
-            echo "- Fork: \`${repo}@${branch}\` (\`${fork_sha}\`)"
-            echo "- Commits on upstream not in this fork: \`${ahead_by}\`"
+            echo "- Fork before sync: \`${GITHUB_REPOSITORY}@main\` (\`${fork_sha}\`)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [ "${ahead_by}" = "0" ]; then
-            echo "Fork is already current with upstream."
+          overlay_backup="$(mktemp)"
+          cp scripts/apply-fork-overlay.mjs "${overlay_backup}"
+
+          if git merge-base --is-ancestor "${upstream_sha}" HEAD; then
+            echo "Fork already contains upstream."
+            echo "- Merge: already up to date" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            if ! git merge --no-commit --no-ff -X theirs "${upstream_ref}"; then
+              if [[ ! -f .git/MERGE_HEAD ]]; then
+                echo "::error::git merge failed before a conflict could be resolved"
+                exit 1
+              fi
+              while IFS= read -r path; do
+                [[ -z "${path}" ]] && continue
+                if git cat-file -e "${upstream_ref}:${path}" 2>/dev/null; then
+                  git checkout --theirs -- "${path}"
+                  git add -- "${path}"
+                else
+                  git rm -f -- "${path}"
+                fi
+              done < <(git diff --name-only --diff-filter=U)
+              if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+                echo "::error::Unresolved conflicts remain"
+                git diff --name-only --diff-filter=U
+                exit 1
+              fi
+              echo "- Merge: conflicts resolved in favor of upstream" >> "${GITHUB_STEP_SUMMARY}"
+            else
+              echo "- Merge: clean (upstream preferred on overlapping hunks)" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+          fi
+
+          if [[ ! -f scripts/apply-fork-overlay.mjs ]]; then
+            mkdir -p scripts
+            cp "${overlay_backup}" scripts/apply-fork-overlay.mjs
+          fi
+          node scripts/apply-fork-overlay.mjs
+          git add -A
+
+          if [[ -f .git/MERGE_HEAD ]] || ! git diff --cached --quiet; then
+            if [[ -f .git/MERGE_HEAD ]]; then
+              git commit -m "Merge upstream ${UPSTREAM_REPO}@${upstream_sha}"
+              echo "- Result: merged ${upstream_sha}" >> "${GITHUB_STEP_SUMMARY}"
+            else
+              git commit -m "chore: reapply fork Cloudflare overlays"
+              echo "- Result: overlays reapplied" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+            git push origin HEAD:main
+            echo "- Pushed: \`$(git rev-parse --short HEAD)\`" >> "${GITHUB_STEP_SUMMARY}"
+          else
             echo "- Result: already up to date" >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
           fi
-
-          echo "Merging ${ahead_by} upstream commit(s) into ${repo}@${branch}..."
-
-          if ! result="$(gh api --method POST "repos/${repo}/merge-upstream" -f branch="${branch}")"; then
-            echo "::error::Failed to merge upstream. Resolve conflicts on main, then re-run this workflow."
-            echo "- Result: merge failed" >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
-
-          echo "${result}" | jq '{message, merge_type, base_branch}'
-          merge_type="$(echo "${result}" | jq -r '.merge_type')"
-          echo "- Result: merged (\`${merge_type}\`)" >> "${GITHUB_STEP_SUMMARY}"
-          echo "Cloudflare Workers Git integration will deploy this push to main."

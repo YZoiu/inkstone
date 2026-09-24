@@ -198,43 +198,6 @@ export const Preview = memo(function Preview({
     }
   }, [mermaidEpoch, settings.preview.mermaid, startMermaidRender])
 
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host?.querySelector('pre.shiki-pending')) return
-    let cancelled = false
-    let attempts = 0
-    let timer: number | undefined
-    const retry = () => {
-      timer = window.setTimeout(() => {
-        if (cancelled || hostRef.current !== host) return
-        void enhancePreview(host, {
-          math: settings.preview.math,
-          mermaid: settings.preview.mermaid,
-          dark: theme === 'dark',
-          codeBlockCollapseLines: settings.preview.codeBlockCollapse
-            ? settings.preview.codeBlockCollapseLines
-            : 0,
-        }).then(() => {
-          attempts++
-          if (!cancelled && attempts < 3 && host.querySelector('pre.shiki-pending')) retry()
-        })
-      }, 1_000)
-    }
-    retry()
-    return () => {
-      cancelled = true
-      if (timer !== undefined) window.clearTimeout(timer)
-    }
-  }, [
-    committedHtml,
-    settings.preview.codeBlockCollapse,
-    settings.preview.codeBlockCollapseLines,
-    settings.preview.math,
-    settings.preview.mermaid,
-    theme,
-  ])
-
-
   useLayoutEffect(() => {
     const snapshot = pendingViewportRef.current
     pendingViewportRef.current = null

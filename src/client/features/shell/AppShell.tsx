@@ -1,23 +1,27 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Eye, FileText, ListTree, PencilLine } from 'lucide-react';
+import { Eye, FileText, PanelLeft, PencilLine, UserRound } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { registerAll } from '../../lib/hotkeys';
 import { useBreakpoint } from '../../lib/hooks';
 import { useSyncEngine } from '../../lib/sync';
 import { Drawer } from '../../components/overlay';
+import { IconButton } from '../../components/primitives';
 import { InlineErrorBoundary } from '../../components/ErrorBoundary';
+import { EditorSkeleton } from '../../components/feedback';
 import { PANEL_WIDTHS, useUi } from '../../store/ui';
 import { createContextualNote, useNotes } from '../../store/notes';
 import { useSession } from '../../store/session';
 import { useUpdate } from '../../store/update';
 import { Sidebar } from '../sidebar/Sidebar';
 import { NoteList } from '../list/NoteList';
-import { Workspace } from '../workspace/Workspace';
-import { FloatingSearch } from './FloatingSearch';
+import { SearchButton } from './SearchButton';
+import { MobileAccount } from './MobileAccount';
 import { Resizer, SplitResizer } from './Resizer';
 import { t } from "../../lib/i18n";
+import { SettingsPanel } from '../settings/SettingsPanel';
+import { scheduleSettingsWarmup } from '../settings/sections';
+const Workspace = lazy(() => import('../workspace/Workspace').then((m) => ({ default: m.Workspace })));
 const CommandPalette = lazy(() => import('../command/CommandPalette').then((m) => ({ default: m.CommandPalette })));
-const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })));
 const ShortcutsPanel = lazy(() => import('../command/ShortcutsPanel').then((m) => ({ default: m.ShortcutsPanel })));
 const GraphPanel = lazy(() => import('../graph/GraphPanel').then((m) => ({ default: m.GraphPanel })));
 const SharePanel = lazy(() => import('../share/SharePanel').then((m) => ({ default: m.SharePanel })));
@@ -27,6 +31,8 @@ const UpdateDialog = lazy(() => import('../update/UpdateDialog').then((m) => ({ 
 export function AppShell() {
     const breakpoint = useBreakpoint();
     const role = useSession((s) => s.user?.role);
+    const userId = useSession((s) => s.user?.id);
+    useEffect(() => scheduleSettingsWarmup(), [userId]);
     const checkForUpdates = useUpdate((s) => s.check);
     useSyncEngine();
     useGlobalHotkeys();
@@ -77,8 +83,12 @@ export function AppShell() {
     const effectiveWorkspaceSplitRatio = workspaceSplitRatio ?? 0.5;
     if (isMobile)
         return <MobileShell />;
-    return (<div className="relative flex h-full min-h-0 overflow-hidden bg-[var(--bg-base)]">
-      <div className="flex min-w-0 flex-1">
+    return (<div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg-base)]">
+      {isTablet && (<div className="flex h-11 shrink-0 items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-sunken)] px-3">
+        <IconButton label={t('common.navigation')} onClick={() => toggleNavDrawer(true)}><PanelLeft size={16}/></IconButton>
+        <div className="w-full max-w-sm"><SearchButton /></div>
+      </div>)}
+      <div className="flex min-h-0 min-w-0 flex-1">
         {showNav && (<>
             <div style={{ width: navCollapsed ? 48 : navWidth }} className="shrink-0 overflow-hidden transition-[width] duration-[var(--dur-slow)] ease-[var(--ease-out)]">
               <Sidebar collapsed={navCollapsed} onCollapse={toggleNav}/>
@@ -94,7 +104,8 @@ export function AppShell() {
           </>)}
 
         <main ref={workspaceGroupsRef} className="flex min-w-0 flex-1">
-          {showWorkspaceSplit ? (<>
+          <Suspense fallback={<WorkspaceFallback />}>
+            {showWorkspaceSplit ? (<>
               <div className="min-w-0" style={{ width: `${effectiveWorkspaceSplitRatio * 100}%` }}>
                 <InlineErrorBoundary><Workspace pane="primary" grouped/></InlineErrorBoundary>
               </div>
@@ -105,10 +116,9 @@ export function AppShell() {
             </>) : (<div className="min-w-0 flex-1">
                 <InlineErrorBoundary><Workspace /></InlineErrorBoundary>
               </div>)}
+          </Suspense>
         </main>
       </div>
-
-      <FloatingSearch />
 
       <Drawer open={navAsDrawer} onClose={() => toggleNavDrawer(false)} side="left" width={272} title={t("common.navigation")}>
         <Sidebar onCollapse={() => toggleNavDrawer(false)}/>
@@ -124,52 +134,60 @@ function MobileShell() {
     const activeNoteId = useUi((s) => s.activeNoteId);
     const notePane = pane === 'editor' || pane === 'preview';
     useEffect(() => {
-        if (!activeNoteId && notePane)
+        if (pane === 'nav' || (!activeNoteId && notePane))
             setPane('list');
-    }, [activeNoteId, notePane, setPane]);
+    }, [activeNoteId, notePane, pane, setPane]);
     const tabs = [
-        { id: 'nav' as const, icon: <ListTree size={19}/>, label: t("common.navigation") },
         { id: 'list' as const, icon: <FileText size={19}/>, label: t("common.note") },
-        ...(activeNoteId ? [
-            { id: 'editor' as const, icon: <PencilLine size={19}/>, label: t("common.edit") },
-            { id: 'preview' as const, icon: <Eye size={19}/>, label: t("common.preview") },
-        ] : []),
+        { id: 'editor' as const, icon: <PencilLine size={19}/>, label: t("common.edit") },
+        { id: 'preview' as const, icon: <Eye size={19}/>, label: t('mobile.view') },
+        { id: 'account' as const, icon: <UserRound size={19}/>, label: t('mobile.account') },
     ];
     return (<div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--bg-base)] pt-[env(safe-area-inset-top)]">
       <div className="relative min-h-0 flex-1">
-        <div aria-hidden={pane !== 'nav'} inert={pane !== 'nav'} data-active={pane === 'nav' || undefined} className="mobile-pane-layer absolute inset-0">
-          <Sidebar onCollapse={() => setPane('list')}/>
+        <div aria-hidden={pane !== 'account'} inert={pane !== 'account'} data-active={pane === 'account' || undefined} className="mobile-pane-layer absolute inset-0">
+          {pane === 'account' && <MobileAccount />}
         </div>
         <div aria-hidden={pane !== 'list'} inert={pane !== 'list'} data-active={pane === 'list' || undefined} className="mobile-pane-layer absolute inset-0">
           <NoteList />
         </div>
         <div aria-hidden={!notePane} inert={!notePane} data-active={notePane || undefined} data-from="right" className="mobile-pane-layer absolute inset-0">
-          {notePane && activeNoteId && (<Workspace mobileLayout={pane === 'preview' ? 'preview' : 'edit'} onMobileBack={() => setPane('list')}/>) }
+          {notePane && activeNoteId && (<Suspense fallback={<WorkspaceFallback />}><Workspace onMobileBack={() => setPane('list')}/></Suspense>) }
         </div>
       </div>
 
-      <FloatingSearch compact/>
-
-      <nav aria-label={t("shell.mobile_navigation")} className="flex h-[calc(56px+env(safe-area-inset-bottom))] shrink-0 items-stretch justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-sunken)] pb-[env(safe-area-inset-bottom)]">
-        {tabs.map((tab) => (<button key={tab.id} type="button" aria-current={pane === tab.id ? 'page' : undefined} onClick={() => setPane(tab.id)} className={cn('flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] transition-colors active:bg-[var(--bg-active)]', pane === tab.id ? 'text-[var(--accent)]' : 'text-[var(--text-quaternary)]')}>
-            <span className={cn('mobile-tab-icon', pane === tab.id && 'is-active')}>{tab.icon}</span>
-            {tab.label}
+      <nav aria-label={t("shell.mobile_navigation")} className="mobile-bottom-nav flex h-[calc(64px+env(safe-area-inset-bottom))] shrink-0 items-stretch justify-around border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] pb-[env(safe-area-inset-bottom)]">
+        {tabs.map((tab) => (<button key={tab.id} type="button" disabled={!activeNoteId && (tab.id === 'editor' || tab.id === 'preview')} aria-current={pane === tab.id ? 'page' : undefined} onClick={() => setPane(tab.id)} className={cn('flex min-w-0 flex-1 items-center justify-center text-[12px] transition-colors disabled:opacity-40', pane === tab.id ? 'text-[var(--accent)]' : 'text-[var(--text-tertiary)]')}>
+            <span className="mobile-tab-content">{tab.icon}<span>{tab.label}</span></span>
           </button>))}
       </nav>
 
       <OverlayHost />
     </div>);
 }
+function WorkspaceFallback() {
+    return (
+        <div
+            className="h-full min-w-0 flex-1 overflow-hidden bg-[var(--bg-editor)]"
+            aria-busy="true"
+            aria-label={t("workspace.loading_note_content")}
+        >
+            <EditorSkeleton />
+        </div>
+    );
+}
+
 function OverlayHost() {
+    const userId = useSession((s) => s.user?.id);
     const panel = useUi((s) => s.panel);
     const closePanel = useUi((s) => s.closePanel);
     const lightbox = useUi((s) => s.lightbox);
     const role = useSession((s) => s.user?.role);
     const updateDialogOpen = useUpdate((s) => s.dialogOpen);
     return (<>
+      {panel === 'settings' && <SettingsPanel key={userId} onClose={closePanel}/>}
       <Suspense fallback={null}>
         {panel === 'command' && <CommandPalette onClose={closePanel}/>}
-        {panel === 'settings' && <SettingsPanel onClose={closePanel}/>}
         {panel === 'shortcuts' && <ShortcutsPanel onClose={closePanel}/>}
         {panel === 'graph' && <GraphPanel onClose={closePanel}/>}
         {panel === 'share' && <SharePanel onClose={closePanel}/>}
@@ -244,7 +262,7 @@ function useGlobalHotkeys(): void {
                 group: () => t("common.interface"),
                 allowInInput: true,
                 handler: () => {
-                    const order = ['edit', 'split', 'preview'] as const;
+                    const order = ['live', 'split', 'preview'] as const;
                     const uiState = ui();
                     if (uiState.workspaceSecondaryNoteId) {
                         const pane = uiState.activeWorkspacePane;

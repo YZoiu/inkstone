@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { DEFAULT_SETTINGS, mergeSettings, mergeSettingsPatch } from '@shared/constants'
 import type { PublicUser, SessionInfo, SiteInfo, TotpLoginChallenge, UserSettings } from '@shared/types'
 import { api, ApiError } from '../lib/api'
-import { setLocale, t } from '../lib/i18n'
+import { getLocale, setLocale, t } from '../lib/i18n'
 import { localDb } from '../lib/db'
 import { applyThemeToDom, useUi } from './ui'
 
@@ -418,15 +418,18 @@ function queueSessionCache(info: SessionInfo): Promise<void> {
 export function syncAppearanceToDom(settings: UserSettings): void {
   const { appearance, preview } = settings
   const root = document.documentElement
-  root.style.setProperty('--prose-size', `${appearance.proseSize}px`)
-  root.style.setProperty('--prose-line', String(appearance.proseLineHeight))
-  root.style.setProperty(
+  const setStyle = (name: string, value: string) => {
+    if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value)
+  }
+  setStyle('--prose-size', `${appearance.proseSize}px`)
+  setStyle('--prose-line', String(appearance.proseLineHeight))
+  setStyle(
     '--prose-width',
     { narrow: '58ch', normal: '72ch', wide: '88ch', full: '100%' }[appearance.proseWidth] ?? '72ch',
   )
-  root.style.setProperty('--editor-size', `${settings.editor.fontSize}px`)
-  root.dataset.preview = preview.layout
-  setLocale(appearance.language)
+  setStyle('--editor-size', `${settings.editor.fontSize}px`)
+  if (root.dataset.preview !== preview.layout) root.dataset.preview = preview.layout
+  if (getLocale() !== appearance.language) setLocale(appearance.language)
 
   useUi.getState().applyAppearance({
     theme: appearance.theme,
@@ -434,7 +437,7 @@ export function syncAppearanceToDom(settings: UserSettings): void {
     background: appearance.background,
     fontScale: appearance.proseSize,
   })
-  useUi.setState({ density: appearance.density })
+  if (useUi.getState().density !== appearance.density) useUi.setState({ density: appearance.density })
 }
 
 export function watchSystemTheme(): () => void {

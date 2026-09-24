@@ -1,16 +1,16 @@
-/** Provides typed runtime localization with complete English and Simplified Chinese resources. */
+/** Provides typed runtime localization with on-demand locale loading. */
 import { useSyncExternalStore } from 'react';
 import type { AppLocale } from '@shared/types';
-import { EN_US_MESSAGES, type MessageKey } from '@shared/locales/en-US';
-import { ZH_CN_MESSAGES } from '@shared/locales/zh-CN';
+import type { MessageKey } from '@shared/locales/en-US';
 import { LOCALE_STORAGE_KEY } from './runtime';
 type Params = Record<string, string | number | boolean | null | undefined>;
 const STORAGE_KEY = LOCALE_STORAGE_KEY;
 const listeners = new Set<() => void>();
-const messages: Record<AppLocale, Record<MessageKey, string>> = {
-    'en-US': EN_US_MESSAGES,
-    'zh-CN': ZH_CN_MESSAGES,
+const messages: Record<AppLocale, Record<string, string>> = {
+    'en-US': {},
+    'zh-CN': {},
 };
+let enMessagesCache: Record<string, string> | null = null;
 const apiCodeMessages: Record<string, MessageKey> = {
     unauthenticated: 'api.error.unauthenticated',
     forbidden: 'api.error.forbidden',
@@ -37,12 +37,39 @@ const apiCodeMessages: Record<string, MessageKey> = {
     two_factor_setup_expired: 'api.error.two_factor_setup_expired',
     two_factor_unavailable: 'api.error.two_factor_unavailable',
 };
-const englishMessageKeys = new Map<string, MessageKey>(Object.entries(EN_US_MESSAGES).map(([key, value]) => [value, key as MessageKey]));
+let englishMessageKeys = new Map<string, MessageKey>();
 let locale: AppLocale = detectInitialLocale();
-export { EN_US_MESSAGES, ZH_CN_MESSAGES };
+let initPromise: Promise<void> | null = null;
+const localeLoaders: Record<AppLocale, () => Promise<Record<string, string>>> = {
+    'en-US': () => import('@shared/locales/en-US').then((m) => m.EN_US_MESSAGES as unknown as Record<string, string>),
+    'zh-CN': () => import('@shared/locales/zh-CN').then((m) => m.ZH_CN_MESSAGES as unknown as Record<string, string>),
+};
+const loadedLocales = new Set<AppLocale>();
+async function ensureLocaleLoaded(target: AppLocale): Promise<void> {
+    if (loadedLocales.has(target)) return;
+    const data = await localeLoaders[target]();
+    messages[target] = data;
+    loadedLocales.add(target);
+    if (target === 'en-US') {
+        enMessagesCache = data;
+        englishMessageKeys = new Map(Object.entries(data).map(([key, value]) => [value as string, key as MessageKey]));
+    }
+}
+export async function initI18n(): Promise<void> {
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+        await ensureLocaleLoaded('en-US');
+        if (locale !== 'en-US') await ensureLocaleLoaded(locale);
+        // Preload the other locale in background for instant switching, but don't block init
+        const other: AppLocale = locale === 'en-US' ? 'zh-CN' : 'en-US';
+        if (!loadedLocales.has(other)) void ensureLocaleLoaded(other);
+        applyLocaleToDom();
+    })();
+    return initPromise;
+}
 export type { MessageKey };
 export function t(key: MessageKey, params?: Params): string {
-    const template = messages[locale][key] ?? EN_US_MESSAGES[key] ?? key;
+    const template = messages[locale][key] ?? enMessagesCache?.[key] ?? key;
     if (!params)
         return template;
     return template.replace(/\{([A-Za-z0-9_]+)\}/g, (whole, name: string) => {
@@ -92,7 +119,6 @@ export function getLocale(): AppLocale {
 export function setLocale(next: AppLocale, persist = true): void {
     if (next !== 'zh-CN' && next !== 'en-US')
         return;
-    const changed = locale !== next;
     locale = next;
     if (persist) {
         try {
@@ -100,9 +126,19 @@ export function setLocale(next: AppLocale, persist = true): void {
         }
         catch { }
     }
-    applyLocaleToDom();
-    if (changed)
+    if (loadedLocales.has(next)) {
+        applyLocaleToDom();
         listeners.forEach((listener) => listener());
+        return;
+    }
+    void ensureLocaleLoaded(next).then(() => {
+        applyLocaleToDom();
+        listeners.forEach((listener) => listener());
+    });
+}
+export async function setLocaleAsync(next: AppLocale, persist = true): Promise<void> {
+    setLocale(next, persist);
+    if (!loadedLocales.has(next)) await ensureLocaleLoaded(next);
 }
 export function subscribeLocale(listener: () => void): () => void {
     listeners.add(listener);

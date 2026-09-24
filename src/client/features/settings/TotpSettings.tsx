@@ -12,19 +12,22 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { LIMITS } from '@shared/constants'
-import type { TotpSetupInfo, TotpStatus } from '@shared/types'
+import type { TotpSetupInfo } from '@shared/types'
 import { Button, Badge } from '../../components/primitives'
 import { Input, SettingRow } from '../../components/form'
 import { api, ApiError } from '../../lib/api'
 import { downloadTextFile } from '../../lib/export-note'
 import { t } from '../../lib/i18n'
 import { useUi } from '../../store/ui'
+import { useSettingsResource } from './resource'
+import { totpResource } from './resources'
+import { SettingsLoading } from './SettingsLoading'
 
 type Panel = 'none' | 'enable' | 'setup' | 'recovery' | 'regenerate' | 'disable'
 
 export function TotpSettings() {
   const toast = useUi((state) => state.toast)
-  const [status, setStatus] = useState<TotpStatus | null>(null)
+  const [status, setStatus] = useSettingsResource(totpResource)
   const [loading, setLoading] = useState(true)
   const [panel, setPanel] = useState<Panel>('none')
   const [password, setPassword] = useState('')
@@ -36,12 +39,11 @@ export function TotpSettings() {
   const mountedRef = useRef(true)
   const busyRef = useRef(false)
 
-  const load = async () => {
+  const load = async (force = true) => {
     setLoading(true)
     setError(null)
     try {
-      const next = await api.auth.totp.status()
-      if (mountedRef.current) setStatus(next)
+      await totpResource.load(force)
     } catch (caught) {
       if (mountedRef.current) setError(errorMessage(caught))
     } finally {
@@ -51,7 +53,7 @@ export function TotpSettings() {
 
   useEffect(() => {
     mountedRef.current = true
-    void load()
+    void load(false)
     return () => {
       mountedRef.current = false
     }
@@ -68,6 +70,7 @@ export function TotpSettings() {
 
   const run = async (task: () => Promise<void>) => {
     if (busyRef.current) return
+    totpResource.invalidate()
     busyRef.current = true
     setBusy(true)
     setError(null)
@@ -76,6 +79,7 @@ export function TotpSettings() {
     } catch (caught) {
       if (mountedRef.current) setError(errorMessage(caught))
     } finally {
+      totpResource.invalidate()
       busyRef.current = false
       if (mountedRef.current) setBusy(false)
     }
@@ -192,11 +196,7 @@ export function TotpSettings() {
   }
 
   if (loading && !status) {
-    return (
-      <div className="rounded-[var(--r-lg)] border border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 py-4 text-[12px] text-[var(--text-tertiary)]">
-        {t('settings.totp_loading')}
-      </div>
-    )
+    return <SettingsLoading label={t('settings.totp_loading')} rows={1} />
   }
 
   if (!status) {

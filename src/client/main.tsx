@@ -15,9 +15,10 @@ async function start(): Promise<void> {
     await installDemoRuntime()
   }
 
-  const [{ App }, { t }] = await Promise.all([import('./App'), import('./lib/i18n')])
+  const [{ App }, i18n] = await Promise.all([import('./App'), import('./lib/i18n')])
+  await i18n.initI18n()
   const container = document.getElementById('root')
-  if (!container) throw new Error(t("app.missing_root_mount_point"))
+  if (!container) throw new Error(i18n.t("app.missing_root_mount_point"))
   createRoot(container).render(
     <StrictMode>
       <App />

@@ -8,7 +8,7 @@ import { fuzzyFilter, splitByRanges } from '../../lib/fuzzy';
 import { useBreakpoint } from '../../lib/hooks';
 import { prettyCombo } from '../../lib/hotkeys';
 import { exportNoteAsHtml, exportNoteAsMarkdown, exportNoteAsPdf } from '../../lib/export-note';
-import { IconButton } from '../../components/primitives';
+import { IconButton, Logo } from '../../components/primitives';
 import { Menu, Tooltip, confirm, useContextMenu, type MenuItem } from '../../components/overlay';
 import { Empty, NoteListSkeleton } from '../../components/feedback';
 import { useUi } from '../../store/ui';
@@ -16,6 +16,7 @@ import { createContextualNote, useNotes, useVisibleNotes } from '../../store/not
 import { folderPathLabel } from '../../lib/folders';
 import { FolderPicker } from '../folders/FolderPicker';
 import { t, useLocale, type MessageKey } from "../../lib/i18n";
+import { MobileLibraryFilters } from '../shell/MobileLibraryFilters';
 const VIEW_MESSAGE_KEYS: Record<ViewKind, MessageKey> = {
     all: 'navigation.all_notes',
     recent: 'navigation.recently_edited',
@@ -30,6 +31,8 @@ const EMPTY_HIGHLIGHT: [
     number,
     number
 ][] = [];
+const INITIAL_RENDERED_NOTES = 180;
+const RENDERED_NOTES_STEP = 240;
 export function NoteList() {
     const locale = useLocale();
     const breakpoint = useBreakpoint();
@@ -50,14 +53,16 @@ export function NoteList() {
     const openNote = useNotes((s) => s.openNote);
     const { emptyTrash, emptyingTrash } = useEmptyTrash();
     const [filter, setFilter] = useState('');
-    const deferredFilter = useDeferredValue(filter);
+    const deferredFilter = useDeferredValue(breakpoint === 'mobile' ? filter : '');
     const [sortMenuOpen, setSortMenuOpen] = useState(false);
     const sortButtonRef = useRef<HTMLButtonElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+    const [renderLimit, setRenderLimit] = useState(INITIAL_RENDERED_NOTES);
     const now = useNow();
     const tagColors = useMemo(() => new Map((tags ?? []).map((item) => [item.name, item.color])), [tags]);
 
-    useEffect(() => setFilter(''), [view, folderId, tag]);
+    useEffect(() => setFilter(''), [view, folderId, tag, breakpoint]);
     const title = useMemo(() => {
         if (view === 'folder')
             return (folderId ? folderPathLabel(folders, folderId) : '') || t("navigation.folder");
@@ -74,16 +79,48 @@ export function NoteList() {
         }));
     }, [notes, deferredFilter]);
     const filteredIds = useMemo(() => filtered.map((item) => item.note.id), [filtered]);
+    const filteredPositions = useMemo(() => new Map(filteredIds.map((id, index) => [id, index + 1])), [filteredIds]);
     const filteredIdsRef = useRef(filteredIds);
     filteredIdsRef.current = filteredIds;
-    const groups = useMemo(() => groupNotes(filtered, sort, view === 'trash', now), [filtered, sort, view, locale, now]);
+    const rendered = useMemo(() => filtered.slice(0, renderLimit), [filtered, renderLimit]);
+    const renderedIds = useMemo(() => new Set(rendered.map((item) => item.note.id)), [rendered]);
+    const groups = useMemo(() => groupNotes(rendered, sort, view === 'trash', now), [rendered, sort, view, locale, now]);
+    useEffect(() => {
+        setRenderLimit(INITIAL_RENDERED_NOTES);
+        listRef.current?.scrollTo?.({ top: 0 });
+    }, [view, folderId, tag, deferredFilter, sort, order, density]);
+    useEffect(() => {
+        if (!activeNoteId)
+            return;
+        const activeIndex = filteredIds.indexOf(activeNoteId);
+        if (activeIndex < 0 || activeIndex < renderLimit)
+            return;
+        setRenderLimit(Math.min(filtered.length, Math.ceil((activeIndex + 1) / RENDERED_NOTES_STEP) * RENDERED_NOTES_STEP));
+    }, [activeNoteId, filteredIds, filtered.length, renderLimit]);
+    useEffect(() => {
+        const root = listRef.current;
+        const target = loadMoreRef.current;
+        if (!root || !target || renderLimit >= filtered.length)
+            return;
+        if (typeof IntersectionObserver === 'undefined') {
+            setRenderLimit(filtered.length);
+            return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting))
+                return;
+            setRenderLimit((current) => Math.min(filtered.length, current + RENDERED_NOTES_STEP));
+        }, { root, rootMargin: '600px 0px' });
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [filtered.length, renderLimit]);
     useEffect(() => {
         if (!activeNoteId)
             return;
         listRef.current
             ?.querySelector<HTMLElement>(`[data-note-id="${activeNoteId}"]`)
             ?.scrollIntoView({ block: 'nearest' });
-    }, [activeNoteId, view, folderId, tag]);
+    }, [activeNoteId, renderLimit, view, folderId, tag]);
     const onKeyDown = (event: React.KeyboardEvent) => {
         if (event.key === 'Escape') {
             useUi.getState().setSelected(activeNoteId ? [activeNoteId] : []);
@@ -146,9 +183,10 @@ export function NoteList() {
             onSelect: () => useUi.getState().setDensity(density === 'comfortable' ? 'compact' : 'comfortable'),
         },
     ];
-    return (<section className="relative flex h-full min-h-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-base)]">
+    return (<section className={cn('relative flex h-full min-h-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-base)]', breakpoint === 'mobile' && 'mobile-note-list')}>
       <header className="shrink-0 px-3 pt-3 pb-2">
-        <div className="mb-2.5 flex items-center justify-between gap-2">
+        {breakpoint === 'mobile' && <div className="mobile-library-brand"><Logo size={22}/><span>{t('common.product_name')}</span></div>}
+        {breakpoint !== 'mobile' && <div className="mb-2.5 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="truncate text-[14.5px] font-semibold tracking-[-0.016em] text-[var(--text-primary)]">{title}</h2>
             {view === 'folder' && <p className="mt-0.5 truncate text-[10.5px] text-[var(--text-quaternary)]">{t("folders.includes_subfolders")}</p>}
@@ -170,40 +208,55 @@ export function NoteList() {
                 </IconButton>
               </Tooltip>)}
           </div>
-        </div>
+        </div>}
 
-        <div className="relative">
-          <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[var(--text-quaternary)]"/>
-          <input aria-label={t("notes.filter_in_this_view")} value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => {
-            if (e.key === 'Escape')
-                setFilter('');
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const first = filtered[0]?.note.id;
-                if (first)
-                    void openNote(first);
-                listRef.current?.focus();
-            }
-        }} placeholder={t("notes.filter_in_this_view")} className={cn('h-10 w-full rounded-[var(--r-md)] border border-transparent bg-[var(--bg-inset)] md:h-[30px]', 'pr-9 pl-8 text-[12.5px] text-[var(--text-primary)] placeholder:text-[var(--text-quaternary)] md:pr-7 md:pl-7', 'transition-[border-color,box-shadow] duration-[var(--dur-fast)]', 'focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-ring)] focus:outline-none')}/>
-          {filter && (<Tooltip label={t("notes.clear_filters")} side="left">
-              <button type="button" onClick={() => setFilter('')} aria-label={t("notes.clear_filters")} className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded text-[var(--text-quaternary)] hover:text-[var(--text-secondary)] md:right-2 md:size-auto md:p-0.5">
-                <X size={12}/>
-              </button>
+        {breakpoint === 'mobile' && <div className="mobile-library-toolbar">
+          <div className="relative mobile-note-search">
+            <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--text-quaternary)]"/>
+            <input aria-label={t("notes.filter_in_this_view")} value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => {
+              if (e.key === 'Escape')
+                  setFilter('');
+              if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  const first = filtered[0]?.note.id;
+                  if (first)
+                      void openNote(first);
+                  listRef.current?.focus();
+              }
+          }} placeholder={t("notes.filter_in_this_view")} className={cn('h-10 w-full rounded-[var(--r-md)] border border-transparent bg-[var(--bg-inset)] md:h-[30px]', 'pr-9 pl-8 text-[12.5px] text-[var(--text-primary)] placeholder:text-[var(--text-quaternary)] md:pr-7 md:pl-7', 'transition-[border-color,box-shadow] duration-[var(--dur-fast)]', 'focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-ring)] focus:outline-none')}/>
+            {filter && (<Tooltip label={t("notes.clear_filters")} side="left">
+                <button type="button" onClick={() => setFilter('')} aria-label={t("notes.clear_filters")} className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded text-[var(--text-quaternary)] hover:text-[var(--text-secondary)]">
+                  <X size={12}/>
+                </button>
+              </Tooltip>)}
+          </div>
+          <Tooltip label={t("notes.sort_and_display")}>
+            <IconButton label={t("notes.sort_and_display")} size="sm" className="mobile-library-sort" ref={sortButtonRef} onClick={() => setSortMenuOpen(true)}>
+              <ArrowDownWideNarrow size={17}/>
+            </IconButton>
+          </Tooltip>
+          {view !== 'trash' && view !== 'archived' && (<Tooltip label={t("common.new_note")} combo="mod+n">
+              <IconButton label={t("common.new_note")} size="sm" className="mobile-library-compose" onClick={() => void createContextualNote()}>
+                <Plus size={19}/>
+              </IconButton>
             </Tooltip>)}
-        </div>
+        </div>}
+
+        {breakpoint === 'mobile' && <MobileLibraryFilters />}
 
         {view === 'trash' && notes.length > 0 && (<button type="button" disabled={emptyingTrash} aria-busy={emptyingTrash} onClick={() => void emptyTrash()} className="mt-2 w-full rounded-[var(--r-md)] border border-[var(--border-subtle)] py-1.5 text-[11.5px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)] disabled:pointer-events-none disabled:opacity-50">{t("notes.empty_trash")}{notes.length}{t("notes.notes_93aeb9")}</button>)}
       </header>
 
-      <div key={`${view}:${folderId ?? ''}:${tag ?? ''}`} ref={listRef} role="listbox" aria-label={title} aria-multiselectable="true" aria-activedescendant={activeNoteId && filteredIds.includes(activeNoteId) ? `note-option-${activeNoteId}` : undefined} tabIndex={0} onKeyDown={onKeyDown} className="anim-view-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]">
+      <div key={`${view}:${folderId ?? ''}:${tag ?? ''}`} ref={listRef} role="listbox" aria-label={title} aria-multiselectable="true" aria-activedescendant={activeNoteId && renderedIds.has(activeNoteId) ? `note-option-${activeNoteId}` : undefined} tabIndex={0} onKeyDown={onKeyDown} className="anim-view-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]">
         {!hydrated && loading ? (<NoteListSkeleton />) : filtered.length === 0 ? (<ListEmpty view={view} filtering={Boolean(filter)}/>) : (groups.map((group) => (<div key={group.key} role="group" aria-label={group.label ?? title}>
               {group.label && (<div className="px-2 pt-3 pb-1 text-[10.5px] font-semibold tracking-[0.06em] text-[var(--text-quaternary)]">
                   {group.label}
                 </div>)}
               <div role="presentation" className="space-y-px">
-                {group.items.map(({ note, ranges }) => (<NoteRow key={note.id} note={note} highlight={ranges} density={density} tagColors={tagColors} onRangeSelect={selectRange}/>))}
+                {group.items.map(({ note, ranges }) => (<NoteRow key={note.id} note={note} highlight={ranges} density={density} tagColors={tagColors} position={filteredPositions.get(note.id) ?? 1} total={filtered.length} onRangeSelect={selectRange}/>))}
               </div>
             </div>)))}
+        {renderLimit < filtered.length && <div ref={loadMoreRef} aria-hidden="true" className="h-px"/>}
       </div>
 
       <BulkBar />
@@ -211,7 +264,7 @@ export function NoteList() {
       <Menu anchor={sortButtonRef} open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} items={sortItems} align="end"/>
     </section>);
 }
-const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, onRangeSelect, }: {
+const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, position, total, onRangeSelect, }: {
     note: NoteSummary;
     highlight: [
         number,
@@ -219,6 +272,8 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, onR
     ][];
     density: 'comfortable' | 'compact';
     tagColors: Map<string, string | null>;
+    position: number;
+    total: number;
     onRangeSelect: (noteId: string) => void;
 }) {
     const breakpoint = useBreakpoint();
@@ -362,7 +417,7 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, onR
         ];
     const titleParts = splitByRanges(note.title || t("common.untitled_note"), highlight);
     return (<>
-      <div id={`note-option-${note.id}`} role="option" aria-selected={active || selected} tabIndex={-1} data-note-id={note.id} draggable style={{ contentVisibility: 'auto', containIntrinsicSize: density === 'compact' ? 'auto 42px' : 'auto 72px' }} onDragStart={(e) => {
+      <div id={`note-option-${note.id}`} role="option" aria-selected={active || selected} aria-posinset={position} aria-setsize={total} tabIndex={-1} data-note-id={note.id} draggable style={{ contentVisibility: 'auto', containIntrinsicSize: density === 'compact' ? 'auto 42px' : 'auto 72px' }} onDragStart={(e) => {
             e.dataTransfer.setData('application/x-inkstone-note', note.id);
             e.dataTransfer.effectAllowed = 'move';
         }} onClick={(event) => {

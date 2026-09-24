@@ -1,23 +1,21 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BrainCircuit, Cloud, Database, Info, Keyboard, Palette, RefreshCw, Type, UserRound, X, } from 'lucide-react';
 import { ACCENTS } from '@shared/constants';
 import { cn } from '../../lib/cn';
 import { Tooltip, useDialogFocus, useEscape, useLockScroll } from '../../components/overlay';
-import { IconButton } from '../../components/primitives';
-import { LoadingBlock } from '../../components/feedback';
+import { Button, IconButton } from '../../components/primitives';
+import { SettingsLoading } from './SettingsLoading';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { AppearanceSettings } from './AppearanceSettings';
-import { EditorSettings } from './EditorSettings';
-import { SyncSettings } from './SyncSettings';
-import { DataSettings } from './DataSettings';
-import { AccountSettings } from './AccountSettings';
-import { AboutSettings } from './AboutSettings';
 import { useUi } from '../../store/ui';
+import { useSession } from '../../store/session';
+import { UI_STORAGE_KEY } from '../../lib/runtime';
+import { scheduleSettingsWarmup, settingsLoaders, warmSettingsSection, type SettingsSection } from './sections';
 import { t } from "../../lib/i18n";
-const BackupSettings = lazy(() => import('./BackupSettings').then((m) => ({ default: m.BackupSettings })));
-const McpSettings = lazy(() => import('./McpSettings').then((m) => ({ default: m.McpSettings })));
-type Section = 'appearance' | 'editor' | 'backup' | 'sync' | 'mcp' | 'account' | 'data' | 'about';
-const SECTIONS: {
+type Section = SettingsSection;
+const AppearancePage = memo(AppearanceSettings);
+export const SECTIONS: {
     id: Section;
     label: () => string;
     icon: React.ReactNode;
@@ -34,26 +32,37 @@ const SECTIONS: {
 export function SettingsPanel({ onClose }: {
     onClose: () => void;
 }) {
-    const [section, setSection] = useState<Section>('appearance');
+    const userId = useSession((s) => s.user?.id);
+    const storageKey = `${UI_STORAGE_KEY}:settings-section:${userId ?? 'anonymous'}`;
+    const [section, setSection] = useState<Section>(() => {
+        try {
+            const saved = localStorage.getItem(storageKey);
+            return SECTIONS.find((item) => item.id === saved)?.id ?? 'appearance';
+        } catch { return 'appearance'; }
+    });
+    const [visited, setVisited] = useState<Section[]>([section]);
+    const selectSection = (next: Section) => {
+        warmSettingsSection(next);
+        setVisited((current) => current.includes(next) ? current : [...current, next]);
+        setSection(next);
+        try { localStorage.setItem(storageKey, next); } catch { }
+    };
     const openPanel = useUi((s) => s.openPanel);
     const panelRef = useRef<HTMLDivElement>(null);
-    const bodyRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
     useEscape(true, onClose);
     useLockScroll(true);
     useDialogFocus(true, panelRef);
-    useEffect(() => {
-        bodyRef.current?.scrollTo({ top: 0 });
-    }, [section]);
+    useEffect(() => scheduleSettingsWarmup(200), []);
     return createPortal(<div className="app-viewport-fixed fixed z-[210] flex items-center justify-center md:p-8">
-      <div className="anim-fade absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px]" onClick={onClose} aria-hidden="true"/>
+      <div className="anim-fade absolute inset-0 bg-[var(--scrim)]" onClick={onClose} aria-hidden="true"/>
 
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="anim-pop relative flex h-full w-full max-w-[880px] flex-col overflow-hidden bg-[var(--bg-overlay)] pt-[env(safe-area-inset-top)] shadow-[var(--shadow-modal)] outline-none md:max-h-[720px] md:flex-row md:rounded-[var(--r-2xl)] md:border md:border-[var(--border-default)] md:pt-0">
         { }
         <nav className="flex w-full shrink-0 flex-col border-b border-[var(--border-subtle)] bg-[var(--bg-sunken)] p-2 md:w-[172px] md:border-r md:border-b-0">
           <div id={titleId} className="px-2 py-1.5 text-[13.5px] font-semibold tracking-[-0.012em] md:py-2.5">{t("common.settings")}</div>
           <div className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-px md:overflow-visible md:pb-0">
-            {SECTIONS.map((item) => (<button key={item.id} type="button" aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)} className={cn('flex h-10 shrink-0 items-center gap-2 rounded-[var(--r-md)] px-2.5 text-left text-[12.5px] md:h-[30px] md:w-full md:gap-2.5 md:px-2', 'transition-colors duration-[var(--dur-fast)]', section === item.id
+            {SECTIONS.map((item) => (<button key={item.id} type="button" aria-current={section === item.id ? 'page' : undefined} onPointerEnter={() => warmSettingsSection(item.id)} onFocus={() => warmSettingsSection(item.id)} onClick={() => selectSection(item.id)} className={cn('flex h-10 shrink-0 items-center gap-2 rounded-[var(--r-md)] px-2.5 text-left text-[12.5px] md:h-[30px] md:w-full md:gap-2.5 md:px-2', 'transition-colors duration-[var(--dur-fast)]', section === item.id
                 ? 'bg-[var(--accent-soft)] font-medium text-[var(--text-primary)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]')}>
                 <span className={cn('shrink-0', section === item.id ? 'text-[var(--accent)]' : 'text-[var(--text-tertiary)]')}>
@@ -90,23 +99,21 @@ export function SettingsPanel({ onClose }: {
             </Tooltip>
           </header>
 
-          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom))] md:px-5 md:py-4">
-            <div key={section} className="anim-view-content">
-              {section === 'appearance' && <AppearanceSettings accents={ACCENTS}/>}
-              {section === 'editor' && <EditorSettings />}
-              {section === 'sync' && <SyncSettings />}
-              {section === 'mcp' && (<Suspense fallback={<LoadingBlock label={t("settings.mcp_loading")}/>}> 
-                  <McpSettings />
-                </Suspense>)}
-              {section === 'account' && <AccountSettings />}
-              {section === 'data' && <DataSettings />}
-              {section === 'about' && <AboutSettings />}
-              {section === 'backup' && (<Suspense fallback={<LoadingBlock label={t("settings.loading_backup_settings")}/> }>
-                  <BackupSettings />
-                </Suspense>)}
-            </div>
-          </div>
+          {visited.map((page) => (<div key={page} hidden={page !== section} inert={page !== section} aria-hidden={page !== section} className={cn('min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-[calc(16px+env(safe-area-inset-bottom))] md:px-5 md:py-4', page !== section && 'hidden')}>
+            {page === 'appearance' ? <AppearancePage accents={ACCENTS}/> : <SettingsPage section={page}/>}
+          </div>))}
         </div>
       </div>
     </div>, document.body);
 }
+
+export const SettingsPage = memo(function SettingsPage({ section }: { section: Exclude<Section, 'appearance'> }) {
+    const [attempt, setAttempt] = useState(0);
+    const Page = useMemo(() => lazy(settingsLoaders[section]), [section, attempt]);
+    return (<ErrorBoundary key={attempt} fallback={<div role="alert" className="space-y-3 py-4 text-[12.5px] text-[var(--text-secondary)]">
+      <p>{t('app.section_unavailable')}</p>
+      <Button size="sm" onClick={() => setAttempt((current) => current + 1)}>{t('common.retry')}</Button>
+    </div>}>
+      <Suspense fallback={<SettingsLoading />}><Page /></Suspense>
+    </ErrorBoundary>);
+});

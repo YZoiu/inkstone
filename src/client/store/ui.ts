@@ -42,7 +42,7 @@ interface UiState {
   workspaceSecondaryNoteId: string | null
   activeWorkspacePane: WorkspacePane
   workspacePaneLayouts: Record<WorkspacePane, EditorLayout>
-  mobilePane: 'nav' | 'list' | 'editor' | 'preview'
+  mobilePane: 'nav' | 'list' | 'editor' | 'preview' | 'account'
 
 
   view: ViewKind
@@ -128,7 +128,7 @@ const DEFAULTS = {
   workspacePrimaryNoteId: null as string | null,
   workspaceSecondaryNoteId: null as string | null,
   activeWorkspacePane: 'primary' as WorkspacePane,
-  workspacePaneLayouts: { primary: 'edit', secondary: 'edit' } as Record<WorkspacePane, EditorLayout>,
+  workspacePaneLayouts: { primary: 'live', secondary: 'live' } as Record<WorkspacePane, EditorLayout>,
   recentNoteIds: [] as string[],
   theme: 'system' as ThemePref,
   accent: 'indigo' as AccentName,
@@ -211,8 +211,8 @@ function loadPersisted(): Partial<UiState> {
     if (value.workspacePaneLayouts && typeof value.workspacePaneLayouts === 'object' && !Array.isArray(value.workspacePaneLayouts)) {
       const layouts = value.workspacePaneLayouts as Record<string, unknown>
       out.workspacePaneLayouts = {
-        primary: isChoice(layouts.primary, ['edit', 'split', 'preview']) ? layouts.primary as EditorLayout : 'edit',
-        secondary: isChoice(layouts.secondary, ['edit', 'split', 'preview']) ? layouts.secondary as EditorLayout : 'edit',
+        primary: layouts.primary === 'preview' ? 'preview' : layouts.primary === 'split' ? 'split' : 'live',
+        secondary: layouts.secondary === 'preview' ? 'preview' : layouts.secondary === 'split' ? 'split' : 'live',
       }
     }
     if (Array.isArray(value.recentNoteIds)) {
@@ -476,7 +476,10 @@ export const useUi = create<UiState>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   applyAppearance: (patch) => {
-    set(patch)
+    const current = get()
+    if (Object.entries(patch).some(([key, value]) => current[key as keyof typeof patch] !== value)) {
+      set(patch)
+    }
     applyThemeToDom(get())
   },
 }))
@@ -489,9 +492,10 @@ export function applyThemeToDom(state: Pick<UiState, 'theme' | 'accent' | 'backg
   const dark =
     state.theme === 'dark' ||
     (state.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  root.dataset.theme = dark ? 'dark' : 'light'
-  root.dataset.accent = state.accent
-  root.dataset.background = state.background
+  const theme = dark ? 'dark' : 'light'
+  if (root.dataset.theme !== theme) root.dataset.theme = theme
+  if (root.dataset.accent !== state.accent) root.dataset.accent = state.accent
+  if (root.dataset.background !== state.background) root.dataset.background = state.background
 }
 
 let themeTransitionTimer: number | undefined

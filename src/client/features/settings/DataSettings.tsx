@@ -3,7 +3,7 @@ import { AlertCircle, Download, FileJson, FileUp, FolderOpen, ImageIcon, Refresh
 import { api } from '../../lib/api';
 import { formatBytes, formatNumber } from '../../lib/time';
 import { Button } from '../../components/primitives';
-import { LoadingBlock } from '../../components/feedback';
+import { SettingsLoading as LoadingBlock } from './SettingsLoading';
 import { SettingRow } from '../../components/form';
 import { confirm } from '../../components/overlay';
 import { useUi } from '../../store/ui';
@@ -11,9 +11,11 @@ import { useNotes } from '../../store/notes';
 import { AttachmentManager } from '../attachments/AttachmentManager';
 import { t } from "../../lib/i18n";
 import { restoreMarkdownBackupFolder } from '../../lib/backup-import';
+import { useSettingsResource } from './resource';
+import { statsResource } from './resources';
 export function DataSettings() {
     const [attachmentManagerOpen, setAttachmentManagerOpen] = useState(false);
-    const [stats, setStats] = useState<Record<string, number> | null>(null);
+    const [stats] = useSettingsResource(statsResource);
     const [statsError, setStatsError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -24,15 +26,14 @@ export function DataSettings() {
     const toast = useUi((s) => s.toast);
     const emptyTrash = useNotes((s) => s.emptyTrash);
     const pull = useNotes((s) => s.pull);
-    const loadStats = useCallback(async () => {
+    const loadStats = useCallback(async (force = true) => {
         if (!mountedRef.current)
             return;
         const epoch = ++statsEpoch.current;
         setStatsError(null);
         try {
-            const result = await api.settings.stats();
+            await statsResource.load(force);
             if (mountedRef.current && epoch === statsEpoch.current) {
-                setStats(result);
                 setStatsError(null);
             }
         }
@@ -91,7 +92,7 @@ export function DataSettings() {
     };
     useEffect(() => {
         mountedRef.current = true;
-        void loadStats();
+        void loadStats(false);
         return () => {
             mountedRef.current = false;
             statsEpoch.current++;

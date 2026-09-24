@@ -50,6 +50,7 @@ export function createApp() {
   })
 
 
+  app.use('/api/*', requireClientHeader)
   app.use('/api/*', async (c, next) => {
     c.set('database', await initializeDatabase(c.env))
     await next()
@@ -63,7 +64,6 @@ export function createApp() {
     await next()
   })
 
-  app.use('/api/*', requireClientHeader)
   app.use('/api/*', loadSession)
   app.use('/authorize', loadSession)
 

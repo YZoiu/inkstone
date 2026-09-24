@@ -161,13 +161,10 @@ export const toggleInlineCode: StateCommand = ({ state, dispatch }) => {
 };
 export const toggleStrikethrough = toggleWrap('~~');
 export const toggleHighlight = toggleWrap('==');
-export const toggleInserted = toggleWrap('++');
-export const toggleSubscript = toggleWrap('~');
-export const toggleSuperscript = toggleWrap('^');
 export const toggleInlineMath = toggleWrap('$');
 export const toggleWikiLink = toggleWrap('[[', ']]');
 export const toggleNoteEmbed = toggleWrap('![[', ']]');
-export const toggleBlockReference = toggleWrap('((', '))');
+export const toggleBlockReference = toggleWrap('[[#^', ']]');
 export const toggleQuote = toggleLinePrefix('> ', /^>\s?/);
 const ANY_LIST_PREFIX = /^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/;
 export const toggleBulletList = toggleLinePrefix(
@@ -322,22 +319,6 @@ export const insertFootnote: StateCommand = ({ state, dispatch }) => {
     return true;
 };
 
-export const insertDefinitionList: StateCommand = ({ state, dispatch }) => {
-    const range = state.selection.main;
-    const selected = state.sliceDoc(range.from, range.to);
-    const term = selected || t("editor.term");
-    const insert = `${term}\n: ${selected ? '' : t("editor.definition")}`;
-    dispatch(state.update({
-        changes: { from: range.from, to: range.to, insert },
-        selection: selected
-            ? EditorSelection.cursor(range.from + insert.length)
-            : EditorSelection.range(range.from, range.from + term.length),
-        scrollIntoView: true,
-        userEvent: 'input.insert',
-    }));
-    return true;
-};
-
 export const insertMermaid: StateCommand = (target) => insertWrappedBlock(
     '```mermaid',
     '```',
@@ -378,20 +359,6 @@ export const insertTabs: StateCommand = ({ state, dispatch }) => {
         selection: selected
             ? EditorSelection.cursor(cursor)
             : EditorSelection.range(cursor, cursor + t("editor.tab_1").length),
-        scrollIntoView: true,
-        userEvent: 'input.insert',
-    }));
-    return true;
-};
-
-export const insertPandocAttributes: StateCommand = ({ state, dispatch }) => {
-    const range = state.selection.main;
-    const selected = state.sliceDoc(range.from, range.to);
-    const insert = selected ? `[${selected}]{#id .class}` : ' {#id .class}';
-    const attributeStart = range.from + (selected ? selected.length + 4 : 3);
-    dispatch(state.update({
-        changes: { from: range.from, to: range.to, insert },
-        selection: EditorSelection.range(attributeStart, attributeStart + 2),
         scrollIntoView: true,
         userEvent: 'input.insert',
     }));

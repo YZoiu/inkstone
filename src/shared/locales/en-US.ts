@@ -1,4 +1,8 @@
 export const EN_US_MESSAGES = {
+    "mobile.account": "Me",
+    "mobile.view": "View",
+    "mobile.menu": "Menu",
+    "mobile.back_to_account": "Back to Me",
     "app.boot_label": "Preparing your notebook…",
     "app.document_title": "Inkstone",
     "app.meta_description": "A private, self-hosted Markdown notebook built on Cloudflare.",
@@ -220,6 +224,7 @@ export const EN_US_MESSAGES = {
     "common.save": "Save",
     "common.save_failed": "Save failed",
     "common.search_notes_or_run_a_command": "Search notes or run a command",
+    "shell.search": "Search",
     "common.settings": "Settings",
     "common.strikethrough": "Strikethrough",
     "common.tabs": "Tabs",
@@ -238,11 +243,9 @@ export const EN_US_MESSAGES = {
     "common.zoom_out": "Zoom out",
     "editor.column_1_column_2_column_3": "| Column 1 | Column 2 | Column 3 |",
     "editor.create_new_note": "Create new note",
-    "editor.definition": "Definition",
     "editor.start_writing": "Start writing…",
     "editor.tab_1": "Tab 1",
     "editor.tab_2": "Tab 2",
-    "editor.term": "Term",
     "editor.upload_failed_value0": "<!-- Upload failed: {value0} -->",
     "editor.uploading_value0": "![Uploading {value0}…]()",
     "feedback.dismiss": "Dismiss",
@@ -928,7 +931,7 @@ export const EN_US_MESSAGES = {
     "share.visits": " visits",
     "shell.add_to_remove_from_favorites": "Add to / remove from favorites",
     "shell.collapse_expand_list": "Collapse/expand list",
-    "shell.cycle_editor_split_preview": "Cycle editor / split / preview",
+    "shell.cycle_editor_split_preview": "Cycle live preview / split view / reading mode",
     "shell.global": "Global",
     "shell.keyboard_shortcuts": "Keyboard shortcuts",
     "shell.mobile_navigation": "Mobile navigation",
@@ -1009,7 +1012,10 @@ export const EN_US_MESSAGES = {
     "time.this_week": "This week",
     "time.today": "Today",
     "time.yesterday": "Yesterday",
-    "workspace.a_snapshot_is_saved_every_few_minutes_or_after_larger_edits": "A snapshot is saved every few minutes or after larger edits",
+      "workspace.reading_mode": "Reading mode",
+  "workspace.live_preview": "Live preview",
+  "workspace.live_preview_hint": "Click to edit; move the cursor away to render. Ctrl / ⌘ + click to open links",
+  "workspace.a_snapshot_is_saved_every_few_minutes_or_after_larger_edits": "A snapshot is saved every few minutes or after larger edits",
     "workspace.autosave_for_value0": "Autosave for “{value0}”",
     "workspace.back_to_notes": "Back to notes",
     "workspace.block_id": "Block ID",
@@ -1019,7 +1025,6 @@ export const EN_US_MESSAGES = {
     "workspace.close_right_note": "Close right note",
     "workspace.choose_a_note_or_write_a_new_one": "Choose a note, or write a new one",
     "workspace.code_block": "Code block",
-    "workspace.definition_list": "Definition list",
     "workspace.details_block": "Details block",
     "workspace.differences_from_current_content": "Differences from current content",
     "workspace.divider": "Divider",
@@ -1035,7 +1040,6 @@ export const EN_US_MESSAGES = {
     "workspace.inline_math": "Inline math",
     "workspace.insert_image": "Insert image",
     "workspace.insert_tag": "Insert tag",
-    "workspace.inserted_text": "Inserted text",
     "workspace.large_content_using_a_faster_comparison": "Large content · using a faster comparison",
     "workspace.latest": "Latest",
     "workspace.layout": "Layout",
@@ -1055,7 +1059,6 @@ export const EN_US_MESSAGES = {
     "workspace.note_embed": "Note embed",
     "workspace.note_syntax": "Note syntax",
     "workspace.open_a_note_from_the_list_or_press_shortcut_to_create_one": "Open a note from the list, or press {shortcut} to create one",
-    "workspace.pandoc_attributes": "Pandoc attributes",
     "workspace.preview_only": "Preview only",
     "workspace.remote_image": "Remote image",
     "workspace.resize_editor_and_preview_panes": "Resize editor and preview panes",
@@ -1065,8 +1068,6 @@ export const EN_US_MESSAGES = {
     "workspace.restored_to_selected_version": "Restored to selected version",
     "workspace.share": "Share",
     "workspace.split_view": "Split view",
-    "workspace.subscript": "Subscript",
-    "workspace.superscript": "Superscript",
     "workspace.table": "Table",
     "workspace.the_current_content_will_be_automatically_saved_as_a_new_version_first_a": "The current content will be automatically saved as a new version first and will not be lost.",
     "workspace.title": "[[title]]",
@@ -1091,11 +1092,11 @@ aliases:
 > - The title at the top of a note is independently editable and does not have to match the first body line.
 > - MCP is entirely optional and requires account authorization before it can read notes.
 
-Use the left side to organize notes, the center to edit plain Markdown, and the right side for live preview. There is no proprietary document format: every \`.md\` file in a backup opens in any text editor.
+Organize notes on the left. Choose live preview to edit content in place, split view for source and preview side by side on desktop and stacked on mobile, or reading mode to browse the rendered document. There is no proprietary document format: every \`.md\` file in a backup opens in any text editor.
 
 ## Try these now
 
-- [ ] Click this checkbox and watch the source update on the left
+- [ ] Click this checkbox and see its state saved
   - [ ] Nested tasks update their exact source line too
 - [ ] Select text and press \`Ctrl + B\` to make it bold
 - [ ] Press \`Ctrl + K\` to open the command palette
@@ -1173,10 +1174,7 @@ Under each example title, the **rendered result** is on the left and the **copya
 | *Italic* | \`*Italic*\` |
 | ~~Strikethrough~~ | \`~~Strikethrough~~\` |
 | ==Highlight== | \`==Highlight==\` |
-| ++Inserted text++ | \`++Inserted text++\` |
 | \`Inline code\` | \`\` \`Inline code\` \`\` |
-| H~2~O | \`H~2~O\` |
-| x^2^ | \`x^2^\` |
 
 ### Links, images, and note relationships
 
@@ -1195,13 +1193,13 @@ Under each example title, the **rendered result** is on the left and the **copya
 ~~~~md-example title="Block ID and reference"
 This content can be addressed precisely. ^markdown-demo
 
-Click ((markdown-demo)) to return to it, or use [[#^markdown-demo]].
+Click [[#^markdown-demo]] to return to it.
 ~~~~
 
 ~~~~md-example title="Note embed"
-This content is embedded again below. ^markdown-embed-demo
+This content is embedded again below. ^embed-demo
 
-![[#^markdown-embed-demo]]
+![[#^embed-demo|Embedded result]]
 ~~~~
 
 ~~~~md-example title="Footnote"
@@ -1209,6 +1207,8 @@ This sentence has an additional note.[^markdown-footnote]
 
 [^markdown-footnote]: This is the rendered footnote. Use its links to move between the reference and definition.
 ~~~~
+
+Obsidian comments are hidden in preview: \`%% one line %%\`, or place \`%%\` markers around multiple lines.
 
 ### Math and diagrams
 
@@ -1227,17 +1227,20 @@ flowchart LR
 \`\`\`
 ~~~~
 
-~~~~md-example title="Pandoc attributes"
-##### Heading with a custom ID {#markdown-custom-heading .wide}
-
-[Jump to the custom heading](#markdown-custom-heading)
-~~~~
-
 ### Modern block extensions
 
 ~~~~md-example title="Obsidian callout"
-> [!NOTE] Rendered callout
+> [!NOTE]- Folded callout with a custom title
 > Put explanations, tasks, lists, or other Markdown here.
+>
+> > [!TIP]+ Expanded nested callout
+> > Nested callouts use the same syntax.
+~~~~
+
+~~~~md-example title="Folded details block"
+::: details [Click to expand]
+This content is hidden until the details block is opened.
+:::
 ~~~~
 
 ~~~~md-example title="Tabs"
@@ -1250,18 +1253,6 @@ This is the first tab panel.
 This is the second tab panel.
 :::
 ::::
-~~~~
-
-~~~~md-example title="Folded content"
-::: details [Open the Markdown details block]
-This is the actual folded content.
-:::
-
-<details>
-<summary>Open the native details block</summary>
-
-Markdown can continue inside it.
-</details>
 ~~~~
 
 ~~~~md-example title="Code block with a title, line numbers, and highlighting"

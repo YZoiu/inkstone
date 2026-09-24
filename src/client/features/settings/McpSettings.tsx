@@ -12,7 +12,7 @@ import {
   Unplug,
 } from 'lucide-react'
 import type { McpGrant, McpSettingsInfo } from '@shared/types'
-import { LoadingBlock } from '../../components/feedback'
+import { SettingsLoading as LoadingBlock } from './SettingsLoading'
 import { Input, SettingRow, Switch } from '../../components/form'
 import { Tooltip, confirm } from '../../components/overlay'
 import { Badge, Button, IconButton } from '../../components/primitives'
@@ -21,6 +21,8 @@ import { t } from '../../lib/i18n'
 import { IS_DEMO_MODE } from '../../lib/runtime'
 import { fullTime, relativeTime } from '../../lib/time'
 import { useUi } from '../../store/ui'
+import { useSettingsResource } from './resource'
+import { mcpResource } from './resources'
 
 type BusyAction =
   | 'global'
@@ -37,7 +39,7 @@ type BusyAction =
 export function McpSettings() {
   const displayOnly = IS_DEMO_MODE
   const toast = useUi((state) => state.toast)
-  const [info, setInfo] = useState<McpSettingsInfo | null>(null)
+  const [info, setInfo] = useSettingsResource(mcpResource)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState<BusyAction>(null)
@@ -47,12 +49,11 @@ export function McpSettings() {
   const mountedRef = useRef(true)
   const busyRef = useRef<BusyAction>(null)
 
-  const load = async () => {
+  const load = async (force = true) => {
     setLoading(true)
     setLoadError(null)
     try {
-      const next = await api.mcp.get()
-      if (mountedRef.current) setInfo(next)
+      await mcpResource.load(force)
     } catch (error) {
       if (mountedRef.current) setLoadError(errorMessage(error))
     } finally {
@@ -62,7 +63,7 @@ export function McpSettings() {
 
   useEffect(() => {
     mountedRef.current = true
-    void load()
+    void load(false)
     return () => {
       mountedRef.current = false
     }
@@ -70,12 +71,14 @@ export function McpSettings() {
 
   const begin = (action: Exclude<BusyAction, null>): boolean => {
     if (busyRef.current) return false
+    mcpResource.invalidate()
     busyRef.current = action
     setBusy(action)
     return true
   }
 
   const finish = () => {
+    mcpResource.invalidate()
     busyRef.current = null
     if (mountedRef.current) setBusy(null)
   }

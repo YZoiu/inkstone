@@ -1,19 +1,48 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { initI18n } from '../i18n'
 import { configureCodeBlockCollapsing, decorateCodeBlock, enhancePreview, toggleCodeBlockCollapse } from './enhance'
+import { highlightWithPrism } from './prism'
+
+beforeAll(async () => {
+  await initI18n()
+})
 
 describe('code block collapsing', () => {
-  it('keeps Shiki syntax highlighting when collapsing a TypeScript block', async () => {
+  it('loads every configured Prism language on demand', async () => {
+    const languages = [
+      'html', 'xml', 'css', 'javascript', 'typescript', 'jsx', 'tsx', 'json', 'markdown',
+      'bash', 'powershell', 'python', 'java', 'c', 'c++', 'c#', 'go', 'rust', 'php', 'ruby',
+      'sql', 'yaml', 'toml', 'dockerfile', 'nginx', 'diff', 'http', 'graphql', 'scss', 'less',
+    ]
+
+    const results = await Promise.all(languages.map((language) => highlightWithPrism('const value = 1', language)))
+
+    expect(results.every(Boolean)).toBe(true)
+  })
+
+  it('highlights supported languages with Prism while preserving line wrappers', async () => {
     const root = document.createElement('div')
-    root.innerHTML = '<div class="code-block" data-lang="typescript"><div class="code-block-head"><span class="code-title">typescript</span><button data-copy type="button">Copy</button></div><pre class="shiki-pending"><code>const answer: number = 42</code></pre></div>'
+    root.innerHTML = '<div class="code-block" data-lang="tsx"><div class="code-block-head"><span class="code-title">tsx</span><button data-copy type="button">Copy</button></div><pre><code>const App = () =&gt; (\n  &lt;main&gt;Hello&lt;/main&gt;\n)</code></pre></div>'
 
     await enhancePreview(root, { math: false, mermaid: false, dark: false, codeBlockCollapseLines: 8 })
 
-    expect(root.querySelector('pre')!.classList.contains('shiki')).toBe(true)
-    const tokens = [...root.querySelectorAll<HTMLElement>('.line span')]
-    expect(tokens.length).toBeGreaterThan(1)
-    expect(tokens[0]!.style.color).not.toBe('')
-    expect(tokens[0]!.style.color).not.toBe(tokens[1]!.style.color)
-    expect(tokens[0]!.style.getPropertyValue('--shiki-dark')).not.toBe('')
+    expect(root.querySelector('code')!.classList.contains('language-tsx')).toBe(true)
+    expect(root.querySelector('.token.keyword')?.textContent).toBe('const')
+    expect(root.querySelector('.token.tag')?.textContent).toContain('main')
+    const lines = [...root.querySelectorAll<HTMLElement>('.line')]
+    expect(lines).toHaveLength(3)
+    expect(lines.map((line) => line.textContent).join('\n')).toBe('const App = () => (\n  <main>Hello</main>\n)')
+  })
+
+  it('leaves unknown languages as plain text without throwing', async () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<div class="code-block" data-lang="not-a-language"><pre><code>&lt;plain&gt;\ntext</code></pre></div>'
+
+    await expect(enhancePreview(root, { math: false, mermaid: false, dark: false })).resolves.toBeUndefined()
+
+    expect(root.querySelector('.token')).toBeNull()
+    expect(root.querySelectorAll('.line')).toHaveLength(2)
+    expect(root.querySelector('code')!.textContent).toBe('<plain>\ntext')
   })
 
   it('collapses long blocks and restores their full height when expanded', () => {

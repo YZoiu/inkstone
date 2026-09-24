@@ -8,33 +8,35 @@ import { useRelativeTime } from '../../lib/hooks';
 import { Badge, Button, IconButton } from '../../components/primitives';
 import { Checkbox, Field, Input, Segmented, SettingRow, Switch } from '../../components/form';
 import { Modal, Tooltip, confirm } from '../../components/overlay';
-import { Empty, LoadingBlock } from '../../components/feedback';
+import { Empty } from '../../components/feedback';
+import { SettingsLoading as LoadingBlock } from './SettingsLoading';
 import { getBackupPresets, type BackupPreset } from './backupPresets';
 import { useSession } from '../../store/session';
 import { useUi } from '../../store/ui';
 import { t, translateServiceMessage } from "../../lib/i18n";
+import { useSettingsResource } from './resource';
+import { backupTargetsResource, backupRunsResource } from './resources';
 export function BackupSettings() {
     const settings = useSession((s) => s.settings);
     const update = useSession((s) => s.updateSettings);
     const toast = useUi((s) => s.toast);
-    const [targets, setTargets] = useState<BackupTarget[] | null>(null);
-    const [runs, setRuns] = useState<BackupRun[]>([]);
+    const [targets, setTargets] = useSettingsResource(backupTargetsResource);
+    const [cachedRuns] = useSettingsResource(backupRunsResource);
+    const runs = cachedRuns ?? [];
     const [editing, setEditing] = useState<BackupTarget | 'new' | null>(null);
     const [running, setRunning] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const reloadEpoch = useRef(0);
     const runningRef = useRef(false);
     const mountedRef = useRef(true);
-    const reload = useCallback(async () => {
+    const reload = useCallback(async (force = true) => {
         if (!mountedRef.current)
             return;
         const epoch = ++reloadEpoch.current;
         try {
-            const [t, r] = await Promise.all([api.backup.targets(), api.backup.runs()]);
+            await Promise.all([backupTargetsResource.load(force), backupRunsResource.load(force)]);
             if (!mountedRef.current || epoch !== reloadEpoch.current)
                 return;
-            setTargets(t.targets);
-            setRuns(r.runs);
             setLoadError(null);
         }
         catch (error) {
@@ -45,7 +47,7 @@ export function BackupSettings() {
     }, []);
     useEffect(() => {
         mountedRef.current = true;
-        void reload();
+        void reload(false);
         return () => {
             mountedRef.current = false;
             runningRef.current = false;
@@ -79,12 +81,14 @@ export function BackupSettings() {
             });
         }
         finally {
+            backupTargetsResource.invalidate();
+            backupRunsResource.invalidate();
             runningRef.current = false;
             if (mountedRef.current)
                 setRunning(false);
         }
     };
-    if (targets === null && loadError)
+    if ((targets === null || cachedRuns === null) && loadError)
         return (<div className="rounded-[var(--r-lg)] border border-[color-mix(in_oklab,var(--danger)_28%,var(--border-subtle))] bg-[var(--bg-base)] p-4">
           <div className="flex items-start gap-3">
             <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--danger)]"/>
@@ -95,7 +99,7 @@ export function BackupSettings() {
             <Button size="sm" variant="secondary" onClick={() => void reload()}>{t("common.retry")}</Button>
           </div>
         </div>);
-    if (targets === null)
+    if (targets === null || cachedRuns === null)
         return <LoadingBlock label={t("settings.loading_backup_configuration")}/>;
     const enabled = targets.filter((t) => t.enabled).length;
     return (<div className="space-y-6">

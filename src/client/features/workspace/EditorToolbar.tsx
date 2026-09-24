@@ -4,7 +4,7 @@ import { Blocks, Bold, Braces, ChevronDown, Code, Heading, Highlighter, Image as
 import { IconButton } from '../../components/primitives';
 import { Menu, Tooltip, type MenuItem } from '../../components/overlay';
 import { cn } from '../../lib/cn';
-import { insertAdvancedCodeBlock, insertBlockId, insertCallout, insertCodeBlock, insertDefinitionList, insertDetails, insertFootnote, insertFrontMatter, insertHorizontalRule, insertImage, insertLink, insertMermaid, insertPandocAttributes, insertTable, insertTabs, insertTag, insertText, setHeading, toggleBlockReference, toggleBold, toggleBulletList, toggleHighlight, toggleInlineCode, toggleInlineMath, toggleInserted, toggleItalic, toggleNoteEmbed, toggleOrderedList, toggleQuote, toggleStrikethrough, toggleSubscript, toggleSuperscript, toggleTaskList, toggleWikiLink, } from '../../editor/commands';
+import { insertAdvancedCodeBlock, insertBlockId, insertCallout, insertCodeBlock, insertDetails, insertFootnote, insertFrontMatter, insertHorizontalRule, insertImage, insertLink, insertMermaid, insertTable, insertTabs, insertTag, insertText, setHeading, toggleBlockReference, toggleBold, toggleBulletList, toggleHighlight, toggleInlineCode, toggleInlineMath, toggleItalic, toggleNoteEmbed, toggleOrderedList, toggleQuote, toggleStrikethrough, toggleTaskList, toggleWikiLink, } from '../../editor/commands';
 import { t } from "../../lib/i18n";
 export function EditorToolbar({ runCommand, view, onPickImage, mobile = false, }: {
     runCommand?: (command: (target: EditorView) => boolean) => void;
@@ -38,9 +38,6 @@ export function EditorToolbar({ runCommand, view, onPickImage, mobile = false, }
     }));
     const inlineItems: MenuItem[] = [
         { id: 'highlight', label: t("common.highlight"), combo: 'mod+shift+h', onSelect: run(toggleHighlight) },
-        { id: 'inserted', label: t("workspace.inserted_text"), onSelect: run(toggleInserted) },
-        { id: 'subscript', label: t("workspace.subscript"), onSelect: run(toggleSubscript) },
-        { id: 'superscript', label: t("workspace.superscript"), onSelect: run(toggleSuperscript) },
         { id: 'inline-math', label: t("workspace.inline_math"), onSelect: run(toggleInlineMath), separatorBefore: true },
     ];
     const noteItems: MenuItem[] = [
@@ -53,16 +50,14 @@ export function EditorToolbar({ runCommand, view, onPickImage, mobile = false, }
         { id: 'footnote', label: t("workspace.footnote"), onSelect: run(insertFootnote), separatorBefore: true },
     ];
     const blockItems: MenuItem[] = [
-        { id: 'definition-list', label: t("workspace.definition_list"), onSelect: run(insertDefinitionList) },
         { id: 'mermaid', label: t("workspace.mermaid_diagram"), onSelect: run(insertMermaid) },
         { id: 'advanced-code', label: t("workspace.enhanced_code_block"), onSelect: run(insertAdvancedCodeBlock) },
         { id: 'callout', label: t("workspace.callout"), onSelect: run(insertCallout) },
         { id: 'details', label: t("workspace.details_block"), onSelect: run(insertDetails) },
         { id: 'tabs', label: t("common.tabs"), onSelect: run(insertTabs) },
-        { id: 'pandoc-attributes', label: t("workspace.pandoc_attributes"), onSelect: run(insertPandocAttributes), separatorBefore: true },
-        { id: 'front-matter', label: 'Front Matter', onSelect: run(insertFrontMatter) },
+        { id: 'front-matter', label: 'Front Matter', onSelect: run(insertFrontMatter), separatorBefore: true },
     ];
-    return (<div className={cn('flex shrink-0 items-center overflow-x-auto border-b border-[var(--border-subtle)] px-2 no-scrollbar', mobile ? 'h-11 gap-1' : 'h-9 gap-0.5')}>
+    return (<div className={cn('editor-toolbar flex shrink-0 items-center overflow-x-auto border-b border-[var(--border-subtle)] px-2 no-scrollbar', mobile ? 'h-11 gap-1' : 'h-9 gap-0.5')}>
       <Tooltip label={t("workspace.title_748d7d")}>
         <button ref={headingRef} type="button" onClick={() => toggleMenu('heading')} aria-label={t("workspace.title_level")} aria-haspopup="menu" aria-expanded={openMenu === 'heading'} className={cn('inline-flex items-center gap-0.5 rounded-[var(--r-md)] px-1.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]', mobile ? 'h-9' : 'h-7')}>
           <Heading size={14}/>

@@ -564,25 +564,45 @@
 }
 
 
-.ink-prose .shiki,
-.ink-prose .shiki span {
-  background-color: transparent !important;
-  font-style: normal;
-  font-weight: var(--code-weight, 400);
-}
-:root[data-theme='dark'] .ink-prose .shiki,
-:root[data-theme='dark'] .ink-prose .shiki span {
-  color: var(--shiki-dark) !important;
-  font-style: normal;
-  font-weight: var(--code-weight, 400);
-  text-decoration: var(--shiki-dark-text-decoration);
-}
-.ink-prose .shiki .line {
+.ink-prose .code-block .line {
   display: inline-block;
   width: 100%;
   min-height: 1lh;
   vertical-align: top;
 }
+.ink-prose .token.comment,
+.ink-prose .token.prolog,
+.ink-prose .token.doctype,
+.ink-prose .token.cdata { color: var(--syntax-comment); }
+.ink-prose .token.punctuation { color: var(--syntax-punctuation); }
+.ink-prose .token.namespace { opacity: 0.75; }
+.ink-prose .token.property,
+.ink-prose .token.tag,
+.ink-prose .token.constant,
+.ink-prose .token.symbol,
+.ink-prose .token.deleted { color: var(--syntax-property); }
+.ink-prose .token.boolean,
+.ink-prose .token.number { color: var(--syntax-number); }
+.ink-prose .token.selector,
+.ink-prose .token.attr-name,
+.ink-prose .token.string,
+.ink-prose .token.char,
+.ink-prose .token.builtin,
+.ink-prose .token.inserted { color: var(--syntax-string); }
+.ink-prose .token.operator,
+.ink-prose .token.entity,
+.ink-prose .token.url { color: var(--syntax-operator); }
+.ink-prose .token.atrule,
+.ink-prose .token.attr-value,
+.ink-prose .token.keyword { color: var(--syntax-keyword); }
+.ink-prose .token.function { color: var(--syntax-function); }
+.ink-prose .token.class-name { color: var(--syntax-type); }
+.ink-prose .token.regex,
+.ink-prose .token.important,
+.ink-prose .token.variable { color: var(--syntax-constant); }
+.ink-prose .token.important,
+.ink-prose .token.bold { font-weight: 600; }
+.ink-prose .token.italic { font-style: italic; }
 .ink-prose .code-block .line.highlighted {
   background: color-mix(in oklab, var(--accent) 12%, transparent);
   box-shadow: inset 2px 0 var(--accent);
@@ -829,19 +849,6 @@
 }
 
 
-.ink-prose dl {
-  margin: 0.8em 0;
-}
-.ink-prose dt {
-  font-weight: 620;
-  margin-top: 0.6em;
-}
-.ink-prose dd {
-  margin: 0.15em 0 0 1.1em;
-  color: var(--text-secondary);
-}
-
-
 .ink-prose mark {
   background: color-mix(in oklab, var(--warning) 26%, transparent);
   color: var(--text-primary);
@@ -859,11 +866,6 @@
   color: var(--text-secondary);
   white-space: nowrap;
 }
-.ink-prose ins {
-  text-decoration: underline;
-  text-decoration-style: solid;
-  text-decoration-color: var(--success);
-}
 .ink-prose del {
   color: var(--text-tertiary);
 }
@@ -871,12 +873,6 @@
   text-decoration: underline dotted;
   cursor: help;
 }
-.ink-prose sub,
-.ink-prose sup {
-  font-size: 0.74em;
-}
-
-
 .ink-prose .katex {
   font-size: 1.04em;
 }

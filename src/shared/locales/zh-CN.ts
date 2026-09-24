@@ -1,5 +1,9 @@
 import type { MessageKey } from './en-US';
 export const ZH_CN_MESSAGES = {
+    "mobile.account": "我的",
+    "mobile.view": "查看",
+    "mobile.menu": "菜单",
+    "mobile.back_to_account": "返回我的",
     "app.boot_label": "正在准备笔记本…",
     "app.document_title": "Inkstone",
     "app.meta_description": "运行在 Cloudflare 上的私有、自托管 Markdown 笔记本。",
@@ -221,6 +225,7 @@ export const ZH_CN_MESSAGES = {
     "common.save": "保存",
     "common.save_failed": "保存失败",
     "common.search_notes_or_run_a_command": "搜索笔记、执行命令",
+    "shell.search": "搜索",
     "common.settings": "设置",
     "common.strikethrough": "删除线",
     "common.tabs": "标签页",
@@ -239,11 +244,9 @@ export const ZH_CN_MESSAGES = {
     "common.zoom_out": "缩小",
     "editor.column_1_column_2_column_3": "| 列 1 | 列 2 | 列 3 |",
     "editor.create_new_note": "创建新笔记",
-    "editor.definition": "定义",
     "editor.start_writing": "开始写点什么…",
     "editor.tab_1": "标签 1",
     "editor.tab_2": "标签 2",
-    "editor.term": "术语",
     "editor.upload_failed_value0": "<!-- 上传失败：{value0} -->",
     "editor.uploading_value0": "![上传中 {value0}…]()",
     "feedback.dismiss": "关闭提示",
@@ -929,7 +932,7 @@ export const ZH_CN_MESSAGES = {
     "share.visits": "次访问",
     "shell.add_to_remove_from_favorites": "收藏 / 取消收藏",
     "shell.collapse_expand_list": "折叠 / 展开列表",
-    "shell.cycle_editor_split_preview": "切换编辑 / 分栏 / 预览",
+    "shell.cycle_editor_split_preview": "切换即时渲染 / 分栏 / 阅读",
     "shell.global": "全局",
     "shell.keyboard_shortcuts": "快捷键面板",
     "shell.mobile_navigation": "手机端导航",
@@ -1010,7 +1013,10 @@ export const ZH_CN_MESSAGES = {
     "time.this_week": "本周",
     "time.today": "今天",
     "time.yesterday": "昨天",
-    "workspace.a_snapshot_is_saved_every_few_minutes_or_after_larger_edits": "每隔几分钟或改动较大时，会自动留一份存档",
+      "workspace.reading_mode": "阅读模式",
+  "workspace.live_preview": "即时渲染",
+  "workspace.live_preview_hint": "点击内容编辑，移开光标查看排版；Ctrl / ⌘ + 点击打开链接",
+  "workspace.a_snapshot_is_saved_every_few_minutes_or_after_larger_edits": "每隔几分钟或改动较大时，会自动留一份存档",
     "workspace.autosave_for_value0": "「{value0}」的自动存档",
     "workspace.back_to_notes": "返回笔记列表",
     "workspace.block_id": "块 ID",
@@ -1020,7 +1026,6 @@ export const ZH_CN_MESSAGES = {
     "workspace.close_right_note": "关闭右侧笔记",
     "workspace.choose_a_note_or_write_a_new_one": "选一篇笔记，或者写一篇新的",
     "workspace.code_block": "代码块",
-    "workspace.definition_list": "定义列表",
     "workspace.details_block": "折叠内容",
     "workspace.differences_from_current_content": "与当前内容的差异",
     "workspace.divider": "分隔线",
@@ -1036,7 +1041,6 @@ export const ZH_CN_MESSAGES = {
     "workspace.inline_math": "行内公式",
     "workspace.insert_image": "插入图片",
     "workspace.insert_tag": "插入标签",
-    "workspace.inserted_text": "插入文本",
     "workspace.large_content_using_a_faster_comparison": "内容较大，已使用快速对比",
     "workspace.latest": "最近一次",
     "workspace.layout": "布局",
@@ -1056,7 +1060,6 @@ export const ZH_CN_MESSAGES = {
     "workspace.note_embed": "笔记嵌入",
     "workspace.note_syntax": "笔记语法",
     "workspace.open_a_note_from_the_list_or_press_shortcut_to_create_one": "左侧列表点一下就能打开；按 {shortcut} 新建",
-    "workspace.pandoc_attributes": "Pandoc 属性",
     "workspace.preview_only": "仅预览",
     "workspace.remote_image": "网络图片",
     "workspace.resize_editor_and_preview_panes": "调整编辑与预览宽度",
@@ -1066,8 +1069,6 @@ export const ZH_CN_MESSAGES = {
     "workspace.restored_to_selected_version": "已恢复到所选版本",
     "workspace.share": "分享",
     "workspace.split_view": "分栏",
-    "workspace.subscript": "下标",
-    "workspace.superscript": "上标",
     "workspace.table": "表格",
     "workspace.the_current_content_will_be_automatically_saved_as_a_new_version_first_a": "当前内容会先自动存为一个新版本，不会丢失。",
     "workspace.title": "[[标题]]",
@@ -1092,11 +1093,11 @@ aliases:
 > - 笔记顶部标题可以独立编辑，不必与正文第一行相同。
 > - MCP 完全可选，并且必须经过账号授权才能读取笔记。
 
-左侧管理笔记，中间编辑纯文本 Markdown，右侧实时预览。没有专有文档格式，备份里的 \`.md\` 文件可以被任何文本编辑器打开。
+左侧管理笔记，正文支持即时渲染、分栏和阅读三种方式：即时渲染中点击内容即可编辑，分栏在电脑上左右排列、手机上上下排列，阅读模式专注浏览正文。没有专有文档格式，备份里的 \`.md\` 文件可以被任何文本编辑器打开。
 
 ## 现在就试试
 
-- [ ] 点击这个复选框，确认它会同步改写左侧源码
+- [ ] 点击这个复选框，确认勾选状态会保存
   - [ ] 子任务也能精确勾选，不会改错上一行
 - [ ] 选中文字，按 \`Ctrl + B\` 加粗
 - [ ] 按 \`Ctrl + K\` 打开命令面板
@@ -1174,10 +1175,7 @@ aliases:
 | *斜体* | \`*斜体*\` |
 | ~~删除线~~ | \`~~删除线~~\` |
 | ==高亮== | \`==高亮==\` |
-| ++插入文本++ | \`++插入文本++\` |
 | \`行内代码\` | \`\` \`行内代码\` \`\` |
-| H~2~O | \`H~2~O\` |
-| x^2^ | \`x^2^\` |
 
 ### 链接、图片与笔记关系
 
@@ -1196,13 +1194,13 @@ aliases:
 ~~~~md-example title="块 ID 与块引用"
 这是一段可以被精确定位的内容。 ^markdown-demo
 
-点击 ((markdown-demo)) 可以跳回上面这段；也可以使用 [[#^markdown-demo]]。
+点击 [[#^markdown-demo]] 可以跳回上面这段。
 ~~~~
 
 ~~~~md-example title="笔记嵌入"
-这段内容会在下方被再次嵌入。 ^markdown-embed-demo
+这段内容会在下方被再次嵌入。 ^embed-demo
 
-![[#^markdown-embed-demo]]
+![[#^embed-demo|嵌入结果]]
 ~~~~
 
 ~~~~md-example title="脚注"
@@ -1210,6 +1208,8 @@ aliases:
 
 [^markdown-footnote]: 这是脚注的实际内容；点击编号可以在正文与脚注之间跳转。
 ~~~~
+
+Obsidian 注释不会出现在预览中：\`%% 单行注释 %%\`；多行内容可用单独的 \`%%\` 标记包围。
 
 ### 公式与图表
 
@@ -1228,17 +1228,20 @@ flowchart LR
 \`\`\`
 ~~~~
 
-~~~~md-example title="Pandoc 属性"
-##### 带自定义 ID 的标题 {#markdown-custom-heading .wide}
-
-[跳到上面的自定义标题](#markdown-custom-heading)
-~~~~
-
 ### 现代块级扩展
 
 ~~~~md-example title="Obsidian Callout"
-> [!NOTE] Callout 实际效果
+> [!NOTE]- 默认折叠并使用自定义标题
 > 这里可以放说明、任务、列表或其他 Markdown 内容。
+>
+> > [!TIP]+ 默认展开的嵌套 Callout
+> > 嵌套 Callout 使用相同语法。
+~~~~
+
+~~~~md-example title="折叠内容"
+::: details [点击展开]
+这里的内容会在展开折叠块后显示。
+:::
 ~~~~
 
 ~~~~md-example title="标签页"
@@ -1251,18 +1254,6 @@ flowchart LR
 这是第二个标签页的内容。
 :::
 ::::
-~~~~
-
-~~~~md-example title="折叠内容"
-::: details [点击展开 Markdown 折叠块]
-这里是折叠后的实际内容。
-:::
-
-<details>
-<summary>点击展开原生折叠块</summary>
-
-这里也可以继续写 Markdown。
-</details>
 ~~~~
 
 ~~~~md-example title="带标题、行号和高亮的代码块"

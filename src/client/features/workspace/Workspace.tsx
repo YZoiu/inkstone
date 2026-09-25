@@ -29,6 +29,7 @@ import { useSession } from '../../store/session';
 import { createContextualNote, useActiveNote, useNotes } from '../../store/notes';
 import { folderPathLabel, openFolderView } from '../../lib/folders';
 import { useSyncScroll } from './sync-scroll';
+import { captureReadingPosition, readReadingPosition, readingPositionKey, restoreReadingPosition, writeReadingPosition } from './reading-position';
 import { t, useLocale } from "../../lib/i18n";
 import { preferredScrollBehavior } from '../../lib/motion';
 const SPLIT_HANDLE_WIDTH = 1;
@@ -42,6 +43,7 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
     const { note, content, loaded } = useActiveNote(pane);
     const loadError = useNotes((s) => note ? s.noteLoadErrors[note.id] : undefined);
     const settings = useSession((s) => s.settings);
+    const userId = useSession((s) => s.user?.id);
     const updateSettings = useSession((s) => s.updateSettings);
     const editContent = useNotes((s) => s.editContent);
     const editTitle = useNotes((s) => s.editTitle);
@@ -71,6 +73,58 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
     const moreButtonRef = useRef<HTMLButtonElement>(null);
     const exportMenuRef = useRef<HTMLButtonElement>(null);
     const [view, setView] = useState<EditorView | null>(null);
+    const readingKey = userId && note ? readingPositionKey(userId, note.id) : null;
+    const pendingReadingRef = useRef<{ key: string; position: ReturnType<typeof captureReadingPosition> } | null>(null);
+    const readingTimerRef = useRef<number | undefined>(undefined);
+    const editorScrollCleanupRef = useRef<(() => void) | null>(null);
+    const flushReadingPosition = useCallback(() => {
+        window.clearTimeout(readingTimerRef.current);
+        const pending = pendingReadingRef.current;
+        pendingReadingRef.current = null;
+        if (pending) writeReadingPosition(pending.key, pending.position);
+    }, []);
+    const saveReadingPosition = useCallback((scroller: HTMLElement, key: string | null) => {
+        if (!key || !scroller.clientHeight) return;
+        pendingReadingRef.current = { key, position: captureReadingPosition(scroller) };
+        window.clearTimeout(readingTimerRef.current);
+        readingTimerRef.current = window.setTimeout(flushReadingPosition, 180);
+    }, [flushReadingPosition]);
+    const restoreReading = useCallback((scroller: HTMLElement, key: string | null) => {
+        if (!key) return;
+        const pending = pendingReadingRef.current;
+        const position = pending?.key === key ? pending.position : readReadingPosition(key);
+        if (position) restoreReadingPosition(scroller, position);
+    }, []);
+    useEffect(() => {
+        window.addEventListener('pagehide', flushReadingPosition);
+        return () => {
+            window.removeEventListener('pagehide', flushReadingPosition);
+            flushReadingPosition();
+        };
+    }, [readingKey, flushReadingPosition]);
+    const onEditorReady = useCallback((next: EditorView | null) => {
+        editorScrollCleanupRef.current?.();
+        editorScrollCleanupRef.current = null;
+        setView(next);
+        if (!next) return;
+        const scroller = next.scrollDOM;
+        const position = readingKey
+            ? pendingReadingRef.current?.key === readingKey
+                ? pendingReadingRef.current.position
+                : readReadingPosition(readingKey)
+            : null;
+        let frame = window.requestAnimationFrame(() => {
+            frame = window.requestAnimationFrame(() => {
+                if (position) restoreReadingPosition(scroller, position);
+            });
+        });
+        const onScroll = () => saveReadingPosition(scroller, readingKey);
+        scroller.addEventListener('scroll', onScroll, { passive: true });
+        editorScrollCleanupRef.current = () => {
+            window.cancelAnimationFrame(frame);
+            scroller.removeEventListener('scroll', onScroll);
+        };
+    }, [readingKey, saveReadingPosition]);
     const [headings, setHeadings] = useState<Heading[]>([]);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -425,13 +479,13 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
 
       <div ref={containerRef} className={cn("flex min-h-0 flex-1", isMobile && "flex-col")} data-editor-layout={layout}>
         <div hidden={!showEditor} inert={!showEditor} className="min-h-0 min-w-0" style={{ width: layout === 'split' && !isMobile ? editorWidth : outlineVisible ? `calc(100% - ${OUTLINE_WIDTH}px)` : '100%', flex: isMobile ? 1 : undefined }}>
-            <DeferredCodeEditor key={note.id} visible={showEditor} value={content} noteTitle={note.title} live={layout === 'live'} onHeadings={setHeadings} onChange={onChange} settings={settings.editor} sources={sources} handlers={handlers} onReady={setView}/>
+            <DeferredCodeEditor key={note.id} visible={showEditor} value={content} noteTitle={note.title} live={layout === 'live'} onHeadings={setHeadings} onChange={onChange} settings={settings.editor} sources={sources} handlers={handlers} onReady={onEditorReady}/>
           </div>
 
         {layout === 'split' && !isMobile && (<SplitResizer label={t("workspace.resize_editor_and_preview_panes")} containerRef={containerRef} ratio={effectiveSplitRatio} onChange={(splitRatio) => setLayout({ splitRatio })} onReset={() => setLayout({ splitRatio: null })}/>)}
 
         {showPreview && (<div className={cn('flex min-h-0 min-w-0 overflow-hidden border-l border-[var(--border-subtle)] bg-[var(--bg-editor)]', isMobile && layout === 'split' && 'flex-1 border-l-0 border-t', layout === 'preview' && 'flex-1 border-l-0')} style={{ width: layout === 'split' && !isMobile ? previewWidth : '100%' }}>
-            <Preview key={note.id} content={content} noteId={note.id} noteTitle={note.title} onHeadings={setHeadings} scrollerRef={previewScrollerRef} onRendered={invalidateSyncAnchors} className="min-w-0 flex-1"/>
+            <Preview key={note.id} content={content} noteId={note.id} noteTitle={note.title} onHeadings={setHeadings} scrollerRef={previewScrollerRef} onRendered={invalidateSyncAnchors} onInitialRender={(scroller) => restoreReading(scroller, readingKey)} onScroll={(scroller) => saveReadingPosition(scroller, readingKey)} className="min-w-0 flex-1"/>
             {outlineVisible && (<Outline headings={headings} onSelect={jumpToHeading} scrollerRef={previewScrollerRef}/>)}
           </div>)}
         {!showPreview && outlineVisible && <Outline headings={headings} onSelect={jumpToHeading}/>}

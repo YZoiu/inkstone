@@ -37,10 +37,11 @@ export function AppShell() {
     useSyncEngine();
     useGlobalHotkeys();
     const hydrated = useNotes((s) => s.hydrated);
+    const loading = useNotes((s) => s.loading);
     const openNote = useNotes((s) => s.openNote);
     const deepLinkHandled = useRef(false);
     useEffect(() => {
-        if (!hydrated || deepLinkHandled.current)
+        if (!hydrated || loading || deepLinkHandled.current)
             return;
         deepLinkHandled.current = true;
         const match = /^\/n\/([0-9a-hjkmnp-tv-z]{26})\/?$/.exec(location.pathname);
@@ -48,7 +49,7 @@ export function AppShell() {
             return;
         useUi.getState().openView('all');
         void openNote(match[1]!);
-    }, [hydrated, openNote]);
+    }, [hydrated, loading, openNote]);
     useEffect(() => {
         if (role === 'owner')
             void checkForUpdates();

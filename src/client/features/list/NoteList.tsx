@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowDownWideNarrow, CheckSquare2, Columns2, Copy, FileCode, FileDown, FileText, FolderInput, MoreHorizontal, Pin, PinOff, PanelLeft, Plus, RotateCcw, Search, Star, StarOff, Trash2, X, } from 'lucide-react';
+import { Archive, ArrowDownWideNarrow, CheckSquare2, Columns2, Copy, FileCode, FileDown, FileText, FolderInput, Link2, MoreHorizontal, Pin, PinOff, PanelLeft, Plus, RotateCcw, Search, Star, StarOff, Trash2, X, } from 'lucide-react';
 import type { NoteSummary, SortKey, ViewKind } from '@shared/types';
 import { cn } from '../../lib/cn';
 import { groupLabel } from '../../lib/time';
@@ -349,9 +349,18 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, pos
             });
         }
     };
-    const items: MenuItem[] = inTrash
+    const copyText = async (value: string, successMessage: 'notes.title_copied' | 'notes.id_copied' | 'notes.direct_link_copied') => {
+        try {
+            await navigator.clipboard.writeText(value);
+            toast({ title: t(successMessage), tone: 'success' });
+        }
+        catch {
+            toast({ title: t('preview.could_not_copy'), tone: 'danger' });
+        }
+    };
+    const noteActions: MenuItem[] = inTrash
         ? [
-            { id: 'restore', label: t("common.restore"), icon: <RotateCcw size={13}/>, onSelect: () => void restoreNote(note.id) },
+            { id: 'restore', label: t("common.restore"), icon: <RotateCcw size={13}/>, separatorBefore: true, onSelect: () => void restoreNote(note.id) },
             {
                 id: 'purge',
                 label: t("notes.delete_permanently"),
@@ -367,12 +376,14 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, pos
                 id: 'open-side',
                 label: t("notes.open_to_side"),
                 icon: <Columns2 size={13}/>,
+                separatorBefore: true,
                 onSelect: () => void openNote(note.id, { pane: 'secondary' }),
             } satisfies MenuItem] : []),
             ...(breakpoint === 'mobile' ? [{
                 id: 'multi-select',
                 label: t("notes.add_to_selection"),
                 icon: <CheckSquare2 size={13}/>,
+                separatorBefore: true,
                 disabled: selectedIds.includes(note.id),
                 onSelect: () => toggleSelected(note.id, true),
             } satisfies MenuItem] : []),
@@ -380,6 +391,7 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, pos
                 id: 'pin',
                 label: note.isPinned ? t("notes.unpin") : t("notes.pin"),
                 icon: note.isPinned ? <PinOff size={13}/> : <Pin size={13}/>,
+                separatorBefore: breakpoint !== 'desktop' && breakpoint !== 'mobile',
                 onSelect: () => void patchNote(note.id, { isPinned: !note.isPinned }),
             },
             {
@@ -415,6 +427,12 @@ const NoteRow = memo(function NoteRow({ note, highlight, density, tagColors, pos
                 onSelect: () => void deleteNote(note.id),
             },
         ];
+    const items: MenuItem[] = [
+        { id: 'copy-title', label: t('notes.copy_title'), icon: <Copy size={13}/>, onSelect: () => void copyText(note.title || t('common.untitled_note'), 'notes.title_copied') },
+        { id: 'copy-id', label: t('notes.copy_id'), icon: <Copy size={13}/>, onSelect: () => void copyText(note.id, 'notes.id_copied') },
+        { id: 'copy-direct-link', label: t('notes.copy_direct_link'), icon: <Link2 size={13}/>, onSelect: () => void copyText(new URL(`/n/${encodeURIComponent(note.id)}`, window.location.origin).href, 'notes.direct_link_copied') },
+        ...noteActions,
+    ];
     const titleParts = splitByRanges(note.title || t("common.untitled_note"), highlight);
     return (<>
       <div id={`note-option-${note.id}`} role="option" aria-selected={active || selected} aria-posinset={position} aria-setsize={total} tabIndex={-1} data-note-id={note.id} draggable style={{ contentVisibility: 'auto', containIntrinsicSize: density === 'compact' ? 'auto 42px' : 'auto 72px' }} onDragStart={(e) => {

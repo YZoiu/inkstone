@@ -191,6 +191,7 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_note ON shares(note_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_shares_user_created ON shares(user_id, created_at DESC, slug DESC)`,
 
   `CREATE TABLE IF NOT EXISTS share_asset_sessions (
     id TEXT PRIMARY KEY,
@@ -626,6 +627,7 @@ const REQUIRED_INDEXES = [
   'idx_targets_user',
   'idx_runs_user',
   'idx_shares_note',
+  'idx_shares_user_created',
   'idx_share_asset_sessions_slug',
   'idx_share_asset_sessions_expires',
   'idx_changes_user',

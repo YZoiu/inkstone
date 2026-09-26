@@ -774,6 +774,18 @@ export function createDemoBackend(): DemoBackend {
     status: 'unavailable' as const,
   }))
 
+  app.get('/api/share', (c) => c.json({
+    shares: [...state.shares.values()]
+      .flatMap((share) => {
+        const note = state.notes.get(share.info.noteId)
+        return note ? [{
+          ...absoluteShare(share.info, c.req.url),
+          noteTitle: note.title,
+          deletedAt: note.deletedAt,
+        }] : []
+      })
+      .sort((a, b) => b.createdAt - a.createdAt || b.slug.localeCompare(a.slug)),
+  }))
   app.get('/api/share/:noteId', (c) => {
     const share = state.shares.get(c.req.param('noteId'))
     return c.json({ share: share ? absoluteShare(share.info, c.req.url) : null })

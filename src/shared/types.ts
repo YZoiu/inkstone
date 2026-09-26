@@ -468,6 +468,11 @@ export interface ShareInfo {
   createdAt: number
 }
 
+export interface ShareListItem extends ShareInfo {
+  noteTitle: string
+  deletedAt: number | null
+}
+
 export interface PublicNote {
   title: string
   content: string

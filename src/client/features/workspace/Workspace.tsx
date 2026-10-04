@@ -1,3 +1,4 @@
+import { APP_SHORTCUTS } from '../../lib/shortcuts';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { ArrowLeft, Columns2, Download, Eye, FileCode, FileDown, FileText, FolderClosed, Hash, History, Link as LinkIcon, ListTree, MoreHorizontal, PanelRightClose, Pencil, Plus, Share2, Star, X, } from 'lucide-react';
@@ -250,6 +251,8 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
         if (!note || !paneActive || !showEditor)
             return;
         const frame = window.requestAnimationFrame(() => {
+            if (!isMobile && document.activeElement?.closest('[data-note-list]'))
+                return;
             if (!note.title)
                 titleInputRef.current?.focus();
             else if (!isMobile)
@@ -428,11 +431,11 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
           <div className={isMobile ? 'hidden' : 'mr-1'}>
             <Segmented label={t("workspace.layout")} size="sm" value={layout} onChange={setEditorLayout} options={[
             { value: 'live', label: <Pencil size={12.5}/>, title: t("workspace.live_preview") },
-            { value: 'split', label: <Columns2 size={12.5}/>, title: t("workspace.split_view"), combo: 'mod+\\' },
+            { value: 'split', label: <Columns2 size={12.5}/>, title: t("workspace.split_view") },
             { value: 'preview', label: <Eye size={12.5}/>, title: t("workspace.reading_mode") },
         ]}/>
           </div>
-          {!isMobile && <><Tooltip label={note.isStarred ? t("common.remove_from_favorites") : t("navigation.favorites")} combo="mod+d">
+          {!isMobile && <><Tooltip label={note.isStarred ? t("common.remove_from_favorites") : t("navigation.favorites")} combo={APP_SHORTCUTS.star}>
             <IconButton label={note.isStarred ? t("common.remove_from_favorites") : t("navigation.favorites")} size="sm" active={note.isStarred} onClick={() => void patchNote(note.id, { isStarred: !note.isStarred })}>
               <Star size={14} className={note.isStarred ? 'fill-current' : undefined}/>
             </IconButton>
@@ -456,7 +459,7 @@ export function Workspace({ onMobileBack, pane = 'active', grouped = false, }: {
               </Tooltip>
               <Menu anchor={exportMenuRef} open={exportMenuOpen} onClose={() => setExportMenuOpen(false)} items={exportMenuItems} align="end" width={200}/>
             </>)}
-          {(<Tooltip label={t("common.outline")} combo="mod+shift+o">
+          {(<Tooltip label={t("common.outline")} combo={isMobile ? undefined : APP_SHORTCUTS.outline}>
               <IconButton label={t("common.outline")} size="sm" active={isMobile ? mobileOutlineOpen : outlineOpen} onClick={() => isMobile ? setMobileOutlineOpen((open) => !open) : toggleOutline()}>
                 {(isMobile ? mobileOutlineOpen : outlineOpen) ? <PanelRightClose size={14}/> : <ListTree size={14}/>}
               </IconButton>
@@ -532,7 +535,7 @@ function NoNoteSelected({ onCreate }: {
     onCreate: () => void;
 }) {
     return (<div className="flex h-full items-center justify-center bg-[var(--bg-editor)]">
-      <Empty art="select" title={t("workspace.choose_a_note_or_write_a_new_one")} description={t("workspace.open_a_note_from_the_list_or_press_shortcut_to_create_one", { shortcut: prettyCombo('mod+n').join('+') })} action={<button type="button" onClick={onCreate} className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-md)] bg-[var(--accent)] px-3.5 text-[12.5px] font-medium text-[var(--accent-contrast)] transition-transform active:translate-y-px">
+      <Empty art="select" title={t("workspace.choose_a_note_or_write_a_new_one")} description={t("workspace.open_a_note_from_the_list_or_press_shortcut_to_create_one", { shortcut: prettyCombo(APP_SHORTCUTS.newNote).join('+') })} action={<button type="button" onClick={onCreate} className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-md)] bg-[var(--accent)] px-3.5 text-[12.5px] font-medium text-[var(--accent-contrast)] transition-transform active:translate-y-px">
             <Plus size={14}/>{t("common.new_note")}</button>}/>
     </div>);
 }
